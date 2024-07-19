@@ -10,7 +10,7 @@ uint32_t timestamp200ms = 0;
 uint32_t timetoblinkers = 0;
 
 bool stringComplete = false;
-String inputString = "",inputValue="0";
+String inputString = "";
 
 int speed = 0;
 
@@ -35,10 +35,7 @@ void loop()
 {
     if (stringComplete)
     {
-        if(inputString.indexOf("SPEED")!=-1){
-            inputValue=inputString.substring(5,inputString.length());
-        }
-        speed=inputValue.toInt();
+        speed = catchValue("SPEED");
         Serial.println(speed);
         Serial.println(inputString);
         inputString = "";
@@ -47,7 +44,15 @@ void loop()
 }
 
 // functions
-
+int catchValue(String valName)
+{
+    String inputValue = "0";
+    if (inputString.indexOf(valName) != -1)
+    {
+        inputValue = inputString.substring(valName.length(), inputString.length());
+    }
+    return inputValue.toInt();
+}
 void serialEvent()
 {
     while (Serial.available())
@@ -56,7 +61,8 @@ void serialEvent()
         if (inChar == '\n')
         {
             stringComplete = true;
-        }else
+        }
+        else
             inputString += inChar;
     }
 }
