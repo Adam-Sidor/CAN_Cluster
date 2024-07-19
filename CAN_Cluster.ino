@@ -15,7 +15,7 @@ bool stringComplete = false;
 String inputString = "";
 
 // values
-int speed = 0, handBrake = 0, rpm = 0;
+int speed = 0, handBrake = 0, rpm = 0,hour = 0, minute = 0;
 bool lightMode[5] = {false, true, false, false, false};
 
 // CAN variables
@@ -47,6 +47,10 @@ void loop()
             speed = catchValue("speed");
         if (catchValue("rpm") >= 0)
             rpm = catchValue("rpm");
+        if (catchValue("hour") >= 0)
+            hour = catchValue("hour");
+        if (catchValue("minute") >= 0)
+            minute = catchValue("minute");
         if (catchValue("handBrake") >= 0)
         {
             handBrake = catchValue("handBrake");
@@ -102,6 +106,7 @@ void loop()
         sendABSBrakeCounter2();
         sendHandbrake(handBrake);
         sendEngineTemp();
+        sendTime();
         timestamp200ms = millis();
     }
 }
@@ -162,6 +167,20 @@ void sendRPM(uint16_t rpm)
   CAN.write(0x80);
   CAN.write(0x99);
 
+  CAN.endPacket();
+}
+
+void sendTime()
+{
+  CAN.beginPacket(0x39E);
+  CAN.write(hour);
+  CAN.write(minute);
+  CAN.write(0x00);
+  CAN.write(0x18);
+  CAN.write(0x7F);
+  CAN.write(0xE7);
+  CAN.write(0x07);
+  CAN.write(0xF2);
   CAN.endPacket();
 }
 
