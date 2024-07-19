@@ -48,10 +48,6 @@ void loop()
             speed = catchValue("speed");
         if (catchValue("rpm") >= 0)
             rpm = catchValue("rpm");
-        if (catchValue("hour") >= 0)
-            hour = catchValue("hour");
-        if (catchValue("minute") >= 0)
-            minute = catchValue("minute");
         if (catchValue("handBrake") >= 0)
             handBrake = catchValue("handBrake");
         if (catchValue("fuel") >= 0)
@@ -88,6 +84,7 @@ void loop()
                 break;
             }
         }
+        catchTime();
         inputString = "";
         stringComplete = false;
     }
@@ -320,6 +317,18 @@ int catchValue(String valName)
         inputValue = inputString.substring(valName.length(), inputString.length());
     }
     return inputValue.toInt();
+}
+
+void catchTime(){
+    String inputHour="0",inputMinute="0";
+    if (inputString.indexOf("time") != -1)
+    {
+        inputHour = inputString.substring(4,6);
+        inputMinute = inputString.substring(7,9);
+        hour=inputHour.toInt();
+        minute=inputMinute.toInt();
+        if(inputString[13]=='P') hour+=12;
+    }
 }
 void serialEvent()
 {
