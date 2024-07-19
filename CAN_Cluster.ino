@@ -173,7 +173,7 @@ void sendRPM(uint16_t rpm)
 }
 void sendFuelLevel(int percent)
 {
-  percent = map(percent, 0, 100, 0, 45);
+  percent = map(percent, 0, 100, 0, 48);
   uint16_t sensor = percent * 160;
 
   CAN.beginPacket(0x349);
