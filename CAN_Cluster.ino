@@ -12,7 +12,7 @@ uint32_t timetoblinkers = 0;
 bool stringComplete = false;
 String inputString = "";
 
-int speed = 0;
+int speed = 0,handBrake=0;
 
 void setup()
 {
@@ -35,18 +35,31 @@ void loop()
 {
     if (stringComplete)
     {
-        speed = catchValue("SPEED");
+        if(catchValue("speed")>=0)
+            speed=catchValue("speed");
+        if(catchValue("handBrake")>=0){
+            handBrake = catchValue("handBrake");
+        }
         Serial.println(speed);
-        Serial.println(inputString);
+        Serial.println(handBrake);
         inputString = "";
         stringComplete = false;
     }
 }
 
-// functions
+//functions
+//CAN functions
+void sendHandbrake(bool isActive)
+{
+  CAN.beginPacket(0x34F);
+  isActive ? CAN.write(0xFE):CAN.write(0xFD);
+  CAN.write(0xFF);
+  CAN.endPacket();
+}
+//Serial functions
 int catchValue(String valName)
 {
-    String inputValue = "0";
+    String inputValue = "-1";
     if (inputString.indexOf(valName) != -1)
     {
         inputValue = inputString.substring(valName.length(), inputString.length());
