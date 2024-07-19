@@ -15,7 +15,7 @@ bool stringComplete = false;
 String inputString = "";
 
 // values
-int speed = 0, handBrake = 0;
+int speed = 0, handBrake = 0, rpm = 0;
 bool lightMode[5] = {false, true, false, false, false};
 
 // CAN variables
@@ -45,6 +45,8 @@ void loop()
     {
         if (catchValue("speed") >= 0)
             speed = catchValue("speed");
+        if (catchValue("rpm") >= 0)
+            rpm = catchValue("rpm");
         if (catchValue("handBrake") >= 0)
         {
             handBrake = catchValue("handBrake");
@@ -88,6 +90,7 @@ void loop()
     {
         sendIgnitionKeyOn();
         sendSpeed(speed, true);
+        sendRPM(rpm);
         timestamp100ms = millis();
     }
     if (millis() - timestamp200ms > 199)
@@ -143,6 +146,23 @@ void sendSpeed(uint16_t speed, bool kmph)
 
     CAN.endPacket();
     count += 200;
+}
+
+void sendRPM(uint16_t rpm)
+{
+  uint16_t tempRpm = rpm * 4.15;
+  CAN.beginPacket(0x0AA);
+
+  CAN.write(0x5F);
+  CAN.write(0x59);
+  CAN.write(0xFF);
+  CAN.write(0x00);
+  CAN.write(lo8(tempRpm));
+  CAN.write(hi8(tempRpm));
+  CAN.write(0x80);
+  CAN.write(0x99);
+
+  CAN.endPacket();
 }
 
 void sendLights()
