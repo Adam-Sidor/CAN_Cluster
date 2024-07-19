@@ -15,7 +15,8 @@ bool stringComplete = false;
 String inputString = "";
 
 // values
-int speed = 0, handBrake = 0, rpm = 0,hour = 0, minute = 0;
+int speed = 0, handBrake = 0, rpm = 0,fuelLevel=100;
+uint8_t hour = 0, minute = 0;
 bool lightMode[5] = {false, true, false, false, false};
 
 // CAN variables
@@ -52,9 +53,9 @@ void loop()
         if (catchValue("minute") >= 0)
             minute = catchValue("minute");
         if (catchValue("handBrake") >= 0)
-        {
             handBrake = catchValue("handBrake");
-        }
+        if (catchValue("fuel") >= 0)
+            fuelLevel = catchValue("fuel");
         if (catchValue("lights") >= 0)
         {
             switch (inputString[6])
@@ -107,6 +108,7 @@ void loop()
         sendHandbrake(handBrake);
         sendEngineTemp();
         sendTime();
+        sendFuelLevel(fuelLevel);
         timestamp200ms = millis();
     }
 }
@@ -169,7 +171,21 @@ void sendRPM(uint16_t rpm)
 
   CAN.endPacket();
 }
+void sendFuelLevel(int percent)
+{
+  percent = map(percent, 0, 100, 0, 45);
+  uint16_t sensor = percent * 160;
 
+  CAN.beginPacket(0x349);
+
+  CAN.write(lo8(sensor));
+  CAN.write(hi8(sensor));
+  CAN.write(lo8(sensor));
+  CAN.write(hi8(sensor));
+  CAN.write(0x00);
+
+  CAN.endPacket();
+}
 void sendTime()
 {
   CAN.beginPacket(0x39E);
