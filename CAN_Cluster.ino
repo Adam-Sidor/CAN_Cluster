@@ -16,6 +16,7 @@ String inputString = "";
 
 // values
 int speed = 0, handBrake = 0;
+bool lightMode[5] = {false, true, false, false, false};
 
 // CAN variables
 uint8_t abs_frame = 0xB3;
@@ -48,8 +49,38 @@ void loop()
         {
             handBrake = catchValue("handBrake");
         }
-        Serial.println(speed);
-        Serial.println(handBrake);
+        if (catchValue("lights") >= 0)
+        {
+            switch (inputString[6])
+            {
+            case '0':
+                lightMode[0] = true;
+                lightMode[1] = false;
+                lightMode[3] = false;
+                break;
+            case '1':
+                lightMode[1] = true;
+                lightMode[0] = false;
+                lightMode[3] = false;
+                break;
+            case '2':
+                lightMode[3] = true;
+                lightMode[1] = true;
+                break;
+            case '3':
+                lightMode[2] = true;
+                break;
+            case '4':
+                lightMode[2] = false;
+                break;
+            case '5':
+                lightMode[4] = true;
+                break;
+            case '6':
+                lightMode[4] = false;
+                break;
+            }
+        }
         inputString = "";
         stringComplete = false;
     }
@@ -61,6 +92,7 @@ void loop()
     }
     if (millis() - timestamp200ms > 199)
     {
+        sendLights();
         sendIgnitionStatus();
         sendAirbagSeatbeltCounter();
         sendABSBrakeCounter1();
@@ -83,34 +115,56 @@ void sendHandbrake(int isActive)
 
 void sendSpeed(uint16_t speed, bool kmph)
 {
-  static uint32_t lastTimeSent = 0;
-  static uint16_t lastReading = 0;
-  static uint16_t count = 0xF000;
-  uint16_t speedValToSend;
-  if (kmph)
-  {
-    speedValToSend = ((millis() - lastTimeSent) / 50) * speed / 2 * 0.65;
-  }
-  else
-    speedValToSend = ((millis() - lastTimeSent) / 50) * speed / 2 * 1.055;
-  speedValToSend += lastReading;
+    static uint32_t lastTimeSent = 0;
+    static uint16_t lastReading = 0;
+    static uint16_t count = 0xF000;
+    uint16_t speedValToSend;
+    if (kmph)
+    {
+        speedValToSend = ((millis() - lastTimeSent) / 50) * speed / 2 * 0.65;
+    }
+    else
+        speedValToSend = ((millis() - lastTimeSent) / 50) * speed / 2 * 1.055;
+    speedValToSend += lastReading;
 
-  lastReading = speedValToSend;
-  lastTimeSent = millis();
+    lastReading = speedValToSend;
+    lastTimeSent = millis();
 
-  CAN.beginPacket(0x1A6);
+    CAN.beginPacket(0x1A6);
 
-  CAN.write(lo8(speedValToSend));
-  CAN.write(hi8(speedValToSend));
-  CAN.write(lo8(speedValToSend));
-  CAN.write(hi8(speedValToSend));
-  CAN.write(lo8(speedValToSend));
-  CAN.write(hi8(speedValToSend));
-  CAN.write(lo8(count));
-  CAN.write(hi8(count));
+    CAN.write(lo8(speedValToSend));
+    CAN.write(hi8(speedValToSend));
+    CAN.write(lo8(speedValToSend));
+    CAN.write(hi8(speedValToSend));
+    CAN.write(lo8(speedValToSend));
+    CAN.write(hi8(speedValToSend));
+    CAN.write(lo8(count));
+    CAN.write(hi8(count));
 
-  CAN.endPacket();
-  count += 200;
+    CAN.endPacket();
+    count += 200;
+}
+
+void sendLights()
+{
+    CAN.beginPacket(0x21A);
+    uint8_t lights = 0;
+    if (lightMode[0])
+        lights = 0;
+    if (lightMode[1])
+        lights += 5;
+    if (lightMode[2])
+        lights += 2;
+    if (lightMode[3])
+        lights += 32;
+    if (lightMode[4])
+        lights += 64;
+    CAN.write(lights);
+    // 5-low 7-high 25-fog front 45-fog back
+    CAN.write(0x12);
+    CAN.write(0xF7);
+
+    CAN.endPacket();
 }
 
 void sendIgnitionKeyOn()
