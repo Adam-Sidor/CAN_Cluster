@@ -8,7 +8,7 @@
 // timers
 uint32_t timestamp100ms = 0;
 uint32_t timestamp200ms = 0;
-uint32_t timetoblinkers = 0;
+uint32_t timeToBlinkers = 0;
 
 // Serial
 bool stringComplete = false;
@@ -16,6 +16,8 @@ String inputString = "";
 
 // values
 int speed = 0, handBrake = 0, rpm = 0, fuelLevel = 100;
+short blinkers = 0;
+bool firstBlink = true;
 uint8_t hour = 0, minute = 0;
 bool lightMode[5] = { false, true, false, false, false };
 
@@ -35,7 +37,7 @@ void setup() {
   Serial.println("Connecting with CAN succesful!");
   timestamp100ms = millis();
   timestamp200ms = millis();
-  timetoblinkers = millis();
+  timeToBlinkers = millis();
 }
 
 void loop() {
@@ -78,7 +80,12 @@ void loop() {
           break;
       }
       catchTime();
+    } else if (catchValue("blinkers") >= 0) {
+      blinkers = catchValue("blinkers");
+      firstBlink = true;
+      timeToBlinkers = millis();
     }
+
     inputString = "";
     stringComplete = false;
   }
@@ -100,10 +107,61 @@ void loop() {
     sendFuelLevel(fuelLevel);
     timestamp200ms = millis();
   }
+  switch (blinkers) {
+    case 0:
+      sendTurnOffBlinkers();
+      break;
+    case 1:
+      if (millis() - timeToBlinkers > 650) {
+        sendLeftBlinker();
+        timeToBlinkers = millis();
+      }
+      break;
+    case 2:
+      if (millis() - timeToBlinkers > 650) {
+        sendRightBlinker();
+        timeToBlinkers = millis();
+      }
+      break;
+  }
 }
 
 // functions
 // CAN functions
+void sendTurnOffBlinkers() {
+  CAN.beginPacket(0x1F6);
+  CAN.write(0x80);
+  if (firstBlink) {
+    CAN.write(0xF0);
+    firstBlink = false;
+  }
+  CAN.endPacket();
+}
+
+void sendLeftBlinker() {
+  CAN.beginPacket(0x1F6);
+  CAN.write(0x91);
+  if (firstBlink) {
+    CAN.write(0xF2);
+    firstBlink = false;
+  }
+  else
+    CAN.write(0xF1);
+  CAN.endPacket();
+}
+
+void sendRightBlinker() {
+  CAN.beginPacket(0x1F6);
+  CAN.write(0xA1);
+  if (firstBlink) {
+    CAN.write(0xF2);
+    firstBlink = false;
+  }
+  else
+    CAN.write(0xF1);
+  CAN.endPacket();
+}
+
 void sendHandbrake(int isActive) {
   CAN.beginPacket(0x34F);
   isActive ? CAN.write(0xFE) : CAN.write(0xFD);
