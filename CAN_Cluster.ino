@@ -44,13 +44,18 @@ void loop() {
   if (stringComplete) {
     if (catchValue("speed") >= 0)
       speed = catchValue("speed");
-    else if (catchValue("rpm") >= 0)
+    if (catchValue("rpm") >= 0)
       rpm = catchValue("rpm");
-    else if (catchValue("handBrake") >= 0)
+    if (catchValue("handBrake") >= 0)
       handBrake = catchValue("handBrake");
-    else if (catchValue("fuel") >= 0)
+    if (catchValue("blinkers") >= 0) {
+      blinkers = catchValue("blinkers");
+      firstBlink = true;
+      timeToBlinkers = millis();
+    }
+    if (catchValue("fuel") >= 0)
       fuelLevel = catchValue("fuel");
-    else if (catchValue("lights") >= 0) {
+    if (catchValue("lights") >= 0) {
       switch (inputString[6]) {
         case '0':
           lightMode[0] = true;
@@ -79,13 +84,9 @@ void loop() {
           lightMode[4] = false;
           break;
       }
-      catchTime();
-    } else if (catchValue("blinkers") >= 0) {
-      blinkers = catchValue("blinkers");
-      firstBlink = true;
-      timeToBlinkers = millis();
     }
-
+    catchTime();
+    //Serial.println(inputString);
     inputString = "";
     stringComplete = false;
   }
@@ -364,20 +365,22 @@ void sendEngineTemp() {
 // Serial functions
 int catchValue(String valName) {
   String inputValue = "-1";
-  if (inputString.indexOf(valName) != -1) {
-    inputValue = inputString.substring(valName.length(), inputString.length());
+  int where=inputString.indexOf(valName);
+  if (where != -1) {
+    inputValue = inputString.substring(where+valName.length(), inputString.length());
   }
   return inputValue.toInt();
 }
 
 void catchTime() {
+  int where=inputString.indexOf("time");
   String inputHour = "0", inputMinute = "0";
-  if (inputString.indexOf("time") != -1) {
-    inputHour = inputString.substring(4, 6);
-    inputMinute = inputString.substring(7, 9);
+  if (where != -1) {
+    inputHour = inputString.substring(where+4, where+6);
+    inputMinute = inputString.substring(where+7, where+9);
     hour = inputHour.toInt();
     minute = inputMinute.toInt();
-    if (inputString[13] == 'P') hour += 12;
+    if (inputString[where+13] == 'P') hour += 12;
   }
 }
 void serialEvent() {
