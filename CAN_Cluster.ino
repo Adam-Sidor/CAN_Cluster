@@ -123,11 +123,29 @@ void loop() {
         timeToBlinkers = millis();
       }
       break;
+    case 3:
+      if (millis() - timeToBlinkers > 650) {
+        sendHazzard();
+        timeToBlinkers = millis();
+      }
+      break;
   }
 }
 
 // functions
 // CAN functions
+void sendHazzard() {
+  CAN.beginPacket(0x1F6);
+  CAN.write(0xB1);
+  if (firstBlink) {
+    CAN.write(0xF2);
+    firstBlink = false;
+  }
+  else
+    CAN.write(0xF1);
+  CAN.endPacket();
+}
+
 void sendTurnOffBlinkers() {
   CAN.beginPacket(0x1F6);
   CAN.write(0x80);
