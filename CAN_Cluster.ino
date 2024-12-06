@@ -86,7 +86,7 @@ void loop() {
       }
     }
     catchTime();
-    //Serial.println(inputString);
+    Serial.println(inputString);
     inputString = "";
     stringComplete = false;
   }
@@ -369,7 +369,10 @@ int catchValue(String valName) {
   if (where != -1) {
     inputValue = inputString.substring(where+valName.length(), inputString.length());
   }
-  return inputValue.toInt();
+  if(inputValue!="")
+    return inputValue.toInt();
+  else
+   return -1;
 }
 
 void catchTime() {
