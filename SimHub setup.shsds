@@ -1,0 +1,93 @@
+{
+  "AutomaticReconnect": true,
+  "SerialPortName": "COM3",
+  "StartupDelayMs": 0,
+  "IsConnecting": false,
+  "IsEnabled": false,
+  "LogIncomingData": true,
+  "IsConnected": false,
+  "BaudRate": 115200,
+  "UpdateMessages": [
+    {
+      "Message": {
+        "Expression": "'speed'+round([SpeedKmh],0)"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'rpm'+if([MaxRpm]<7000,round([Rpms],0),round([Rpms],0)*7000/[MaxRpm])"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'fuel'+round([FuelPercent],0)+'\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamHigh],'lights3','lights4')+'\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.Beacon],'lights5','lights6')+'\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'lights' + if([GameRawData.TruckValues.CurrentValues.LightsValues.Parking],if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamLow],'2','1'),'0') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'time'+right([DataCorePlugin.CurrentDateTime], 0, 11)+'\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerLeftActive],'blinkers1',if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerRightActive],'blinkers2','blinkers0')) + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 60
+    }
+  ],
+  "OnConnectMessage": {
+    "Expression": ""
+  },
+  "OnDisconnectMessage": {
+    "Expression": ""
+  },
+  "DtrEnable": false,
+  "RtsEnable": false,
+  "EditorExpanded": true,
+  "Name": "Custom Serial device",
+  "Description": "New Cluster",
+  "LastErrorDate": "2024-12-06T20:32:37.7824037+01:00",
+  "LastErrorMessage": null,
+  "IsFreezed": false,
+  "SettingsBuilder": {
+    "Settings": [],
+    "IsEditMode": false
+  }
+}
