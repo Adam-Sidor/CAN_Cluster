@@ -31,6 +31,13 @@
     },
     {
       "Message": {
+        "Expression": "'handBrake' + [Handbrake]"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
         "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamHigh],'lights3','lights4')+'\\n'"
       },
       "IsEnabled": true,
@@ -83,7 +90,7 @@
   "EditorExpanded": true,
   "Name": "Custom Serial device",
   "Description": "New Cluster",
-  "LastErrorDate": "2024-12-06T20:32:37.7824037+01:00",
+  "LastErrorDate": "2024-12-16T14:19:02.8296664+01:00",
   "LastErrorMessage": null,
   "IsFreezed": false,
   "SettingsBuilder": {
