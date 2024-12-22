@@ -53,8 +53,10 @@ Instrukcja krok po kroku, jak skonfigurować i uruchomić projekt:
    - Skonfiguruj połączenie z Arduino w sekcji `Serial settings`.  
 4. Podłączenie sprzętu:  
    - Podłącz moduł CAN do Arduino oraz licznika samochodowego.  
-   - Podłącz do licznika samochodowego zasilanie +12V.  
+   - Podłącz do licznika samochodowego zasilanie +12V oraz masę wszystkich płytek.  
    - Podłącz Arduino za pomocą kabla USB.
+   - Schemat podłączenia:
+   ![Schemat](images/schematic.png)
 
 ---
 
