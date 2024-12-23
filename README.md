@@ -72,8 +72,8 @@ W zależności od gry niektóre z funkcjonalności mogą nie działać!
 - Integracja z aplikacją SimHub.  
 - Wizualizacja danych na liczniku samochodowym. 
    - Prędkościomierz
-   - Obrotościomierz (Tachometr)
-   - Wskaźnik poziomu paliwa
+   - Obrotomierz (Tachometr)
+   - Wskaźnik poziomu paliwa (Czasem wymaga ponownego uruchomienia Arduino przyciskiem RESET)
    - Zegar wyświetlający czas systemowy komputera
    - Wskaźnik hamulca ręcznego
    - Wskaźniki kierunkowskazów
