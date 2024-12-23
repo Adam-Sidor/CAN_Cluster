@@ -53,8 +53,9 @@ Instrukcja krok po kroku, jak skonfigurować i uruchomić projekt:
    - Skonfiguruj połączenie z Arduino w sekcji `Serial settings`.  
 4. Podłączenie sprzętu:  
    - Podłącz moduł CAN do Arduino oraz licznika samochodowego.  
-   - Podłącz do licznika samochodowego zasilanie +12V oraz masę wszystkich płytek.  
+   - Podłącz do licznika samochodowego zasilanie `+12V` oraz masę wszystkich płytek.  
    - Podłącz Arduino za pomocą kabla USB.
+   - Jeśli chcesz pozbyć się komunikatu o zbyt niskiej temperaturze otoczenia należy umieścić rezystor o odpowiedniej rezystancji np. `6 kΩ`. Temperatura na liczniku zależy od dobranej rezystancji. W przypadku podanej wartości wyświetlana tamperatura wynosi ok. 18 ℃.
    - Schemat podłączenia:
    ![Schemat](images/schematic.png)
 
@@ -83,6 +84,7 @@ W zależności od gry niektóre z funkcjonalności mogą nie działać!
       - Drogowe (Długie)
       - Ostrzegawcze (Kontrolka świateł przeciwmgielnych tylnych)
       - Podświetlenie licznika zgodne z aktualnie włączonymi światłami
+   - Wskaźnik temperatury (Stała wartość w zależności od dobranego rezystora podczas [Instalacji](#instalacja))
 
 ---
 
