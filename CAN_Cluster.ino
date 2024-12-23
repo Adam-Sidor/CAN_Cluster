@@ -56,31 +56,31 @@ void loop() {
     if (catchValue("fuel") >= 0)
       fuelLevel = catchValue("fuel");
     if (catchValue("lights") >= 0) {
-      switch (inputString[6]) {
-        case '0':
+      switch (catchValue("lights")) {
+        case 0:
           lightMode[0] = true;
           lightMode[1] = false;
           lightMode[3] = false;
           break;
-        case '1':
+        case 1:
           lightMode[1] = true;
           lightMode[0] = false;
           lightMode[3] = false;
           break;
-        case '2':
+        case 2:
           lightMode[3] = true;
           lightMode[1] = true;
           break;
-        case '3':
+        case 3:
           lightMode[2] = true;
           break;
-        case '4':
+        case 4:
           lightMode[2] = false;
           break;
-        case '5':
+        case 5:
           lightMode[4] = true;
           break;
-        case '6':
+        case 6:
           lightMode[4] = false;
           break;
       }
