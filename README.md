@@ -78,7 +78,8 @@ W zależności od gry niektóre z funkcjonalności mogą nie działać!
    - Wskaźnik hamulca ręcznego
    - Wskaźniki kierunkowskazów
    - Światła
-      - Pozycyjne (Kontrolka świateł przeciwmgielnych przednich)
+      - Pozycyjne
+      - Mijania (Kontrolka świateł przeciwmgielnych przednich)
       - Drogowe (Długie)
       - Ostrzegawcze (Kontrolka świateł przeciwmgielnych tylnych)
       - Podświetlenie licznika zgodne z aktualnie włączonymi światłami
