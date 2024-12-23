@@ -38,7 +38,7 @@
     },
     {
       "Message": {
-        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamHigh],'lights3','lights4')+'\\n'"
+        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamHigh] and [EngineStarted],'lights3','lights4')+'\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -90,7 +90,7 @@
   "EditorExpanded": true,
   "Name": "Custom Serial device",
   "Description": "New Cluster",
-  "LastErrorDate": "2024-12-16T14:19:02.8296664+01:00",
+  "LastErrorDate": "2024-12-23T22:02:27.4658251+01:00",
   "LastErrorMessage": null,
   "IsFreezed": false,
   "SettingsBuilder": {
