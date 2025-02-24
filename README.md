@@ -43,7 +43,8 @@ Instrukcja krok po kroku, jak skonfigurować i uruchomić projekt:
    ```
 2. Wgranie kodu na Arduino:  
    - Otwórz plik `.ino` w Arduino IDE. 
-   - Zainstaluj potrzebne biblioteki. 
+   - Zainstaluj potrzebne biblioteki.
+      - Jeśli nie posiadasz biblioteki do obsługi CAN, należy skopiować folder `CAN-0.3.1` do folderu z bibliotekami (na Windows domyślnie znajduje się w `Dokumentach`). 
    - Wybierz odpowiedni port COM oraz model Arduino.  
    - Wgraj kod na płytkę.  
 3. Konfiguracja SimHub:  
