@@ -55,7 +55,7 @@ Step-by-step instructions to set up and run the project:
    * Open the `.ino` file in Arduino IDE.
    * Install the required libraries.
 
-     * If you don't have the CAN library, copy the `CAN-0.3.1` folder into your Arduino libraries folder (on Windows usually in `Documents`).
+     * If you are using MCP2515 module and don't have the CAN library, copy the `CAN-0.3.1` folder into your Arduino libraries folder (on Windows usually in `Documents`).
    * Select the correct COM port and Arduino model.
    * Upload the code to the board.
 3. Configure SimHub:
