@@ -122,10 +122,11 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   | Water temperature | 39 |
   | Battery voltage | 213 |
   | Air pressure | 308 |
-  | Engine damage ≥ 10 % | 31 (check engine) |
-  | Transmission damage ≥ 10 % | 288 (gearbox) |
   | Wheels damage ≥ 10 % | 50 (tyre pressure) |
-  | Cabin or chassis damage ≥ 10 % | 21 |
+  | Chassis damage ≥ 10 % | 34 (check engine) |
+  | Chassis damage ≥ 30 % | 21 |
+  | Cargo damage ≥ 10 % | 169 (yellow exclamation mark) |
+  | Trailer chassis damage ≥ 10 % | 19 (boot open) |
 
   Other IDs tested on the cluster: 28 (oil level), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
 * Fuel consumption (`fuelRate<µl/s>`, also in the Uno version) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
