@@ -115,8 +115,13 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   | Water temperature | 39 |
   | Battery voltage | 213 |
   | Air pressure | 308 |
+  | Engine damage ≥ 10 % | 31 (check engine) |
+  | Transmission damage ≥ 10 % | 288 (gearbox) |
+  | Wheels damage ≥ 10 % | 50 (tyre pressure) |
+  | Cabin or chassis damage ≥ 10 % | 21 |
 
-  Other IDs tested on the cluster: 28 (oil level), 31 (check engine), 50 (tyre pressure), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
+  Other IDs tested on the cluster: 28 (oil level), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
+* Fuel consumption (`fuelRate<µl/s>`) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
 * After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.
 * When Bluetooth disconnects, the speedometer and tachometer drop to zero.
 * Debugging tools (USB serial monitor, 115200 baud, line ending `Newline`):
@@ -147,7 +152,8 @@ Some features may not work depending on the game!
   * Clock displaying computer system time
   * Handbrake indicator
   * Turn signals and hazard lights
-  * Truck warnings (low fuel, AdBlue, oil pressure, water temperature, battery, air pressure) as check control messages (ESP32 version, ETS2/ATS)
+  * Truck warnings (low fuel, AdBlue, oil pressure, water temperature, battery, air pressure) and damage as check control messages (ESP32 version, ETS2/ATS)
+  * Fuel consumption gauge (ESP32 version)
   * Cruise control set speed shown on the display while cruise is active (ESP32 version, ETS2/ATS; km/h shown as mph 1:1) - this also removes the cruise control error shown after power-up
   * Lights:
 

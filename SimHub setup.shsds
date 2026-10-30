@@ -129,6 +129,41 @@
     },
     {
       "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Engine], 0) >= 0.1, 'ccOn31', 'ccOff31') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Transmission], 0) >= 0.1, 'ccOn288', 'ccOff288') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.WheelsAvg], 0) >= 0.1, 'ccOn50', 'ccOff50') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Cabin], 0) >= 0.1 or isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Chassis], 0) >= 0.1, 'ccOn21', 'ccOff21') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'fuelRate' + if([SpeedKmh] < 1, 0, round(isnull([DataCorePlugin.GameData.InstantConsumption_L100KM], 0) * [SpeedKmh] * 25 / 9 / 3, 0)) + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
         "Expression": "'\\n'"
       },
       "IsEnabled": true,

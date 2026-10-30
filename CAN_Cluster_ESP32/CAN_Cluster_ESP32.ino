@@ -61,6 +61,7 @@ bool lightMode[5] = { false, true, false, false, false };
 bool cruiseActive = false;
 int cruiseSpeed = 0;  // km/h
 uint32_t cruiseRefreshInterval = 1000;
+int fuelRate = 0;  // µl/s, drives the consumption gauge and on-board computer
 const uint8_t bcPins[3] = { BC_ENTER_PIN, BC_UP_PIN, BC_DOWN_PIN };
 int8_t bcActivePin = -1;
 uint32_t bcPressStart = 0;
@@ -123,6 +124,9 @@ void loop() {
     sendIgnitionKeyOn();
     sendSpeed(speed, true);
     sendRPM(rpm);
+    sendEngineData();
+    sendDmeStatus();
+    sendVehicleDynamics(speed);
     timestamp100ms = millis();
   }
   if (millis() - timestamp200ms > 199) {
@@ -132,7 +136,6 @@ void loop() {
     sendABSBrakeCounter1();
     sendABSBrakeCounter2();
     sendHandbrake(handBrake);
-    sendEngineTemp();
     sendTime();
     sendFuelLevel(fuelLevel);
     sendCruiseControl();
@@ -387,19 +390,61 @@ void sendABSBrakeCounter1() {
   }
 }
 
-void sendEngineTemp() {
+// Engine data from DME (format from veikkos/e90-can-cluster): byte 2 alive counter + run state in bits 4-5
+// (2 = running), bytes 4-5 total injected fuel in µl. The cluster computes instant consumption (mpg gauge),
+// average consumption and range from it.
+void sendEngineData() {
+  static uint32_t lastTime = 0;
+  static uint32_t fuelRemainder = 0;  // µl * 1000
+  static uint16_t fuelTotal = 0;
+  uint32_t now = millis();
+  fuelRemainder += (uint32_t)constrain(fuelRate, 0, 100000) * (now - lastTime);
+  fuelTotal += fuelRemainder / 1000;
+  fuelRemainder %= 1000;
+  lastTime = now;
+
   CAN.beginPacket(0x1D0);
-  CAN.write(0x8B);
-  CAN.write(0xFF);
-  CAN.write(tempCounter);
-  CAN.write(0xCC);
-  CAN.write(0x5D);
-  CAN.write(0x37);
+  CAN.write(0x8B);  // coolant temperature + 48 (91 °C)
+  CAN.write(0x8A);  // oil temperature + 48 (90 °C)
+  CAN.write(0x20 | (tempCounter & 0x0F));
   CAN.write(0xCD);
-  CAN.write(0xFF);
+  CAN.write(lo8(fuelTotal));
+  CAN.write(hi8(fuelTotal));
+  CAN.write(0xCD);
+  CAN.write(0xA8);
 
   CAN.endPacket();
   tempCounter++;
+}
+
+// DME status (fixed frame from veikkos/e90-can-cluster).
+void sendDmeStatus() {
+  CAN.beginPacket(0x12F);
+  CAN.write(0x3F);
+  for (int i = 0; i < 4; i++)
+    CAN.write(0x00);
+  CAN.write(0x40);
+  CAN.write(0x01);
+  CAN.write(0x00);
+  CAN.endPacket();
+}
+
+// Vehicle speed from DSC in 0.1 km/h (format from veikkos/e90-can-cluster), accelerations and yaw rate 0.
+// Byte 1 bits 4-6: driving direction forward, byte 6 high nibble alive counter, byte 7 checksum.
+void sendVehicleDynamics(uint16_t kmph) {
+  uint16_t raw = constrain(kmph * 10, 0, 0xFFF);
+  uint8_t frame[8] = {};
+  frame[0] = lo8(raw);
+  frame[1] = 0x80 | (kmph >= 1 ? 0x10 : 0x00) | ((raw >> 8) & 0x0F);
+  frame[6] = (((millis() % 300) * 16 / 300) & 0x0F) << 4;
+  uint16_t sum = 0x00A0;
+  for (int i = 0; i < 7; i++)
+    sum += frame[i];
+  frame[7] = sum + (sum >> 8) + 0x01;
+
+  CAN.beginPacket(0x1A0);
+  CAN.write(frame, 8);
+  CAN.endPacket();
 }
 
 // Cruise control status from DME (flags from commaai/opendbc bmw_e9x_e8x.dbc, speed scale tested on the cluster).
@@ -537,6 +582,8 @@ void processLine(const char* line) {
   }
   if (catchValue(line, "fuel", value))
     fuelLevel = value;
+  if (catchValue(line, "fuelRate", value))
+    fuelRate = value;
   if (catchValue(line, "cruise", value))
     cruiseActive = value;
   if (catchValue(line, "cruiseSpeed", value))
@@ -737,6 +784,7 @@ void checkBluetoothConnection() {
     if (!connected) {
       speed = 0;
       rpm = 0;
+      fuelRate = 0;
       cruiseActive = false;
       clearCheckControl();
       if (blinkers != 0) {
