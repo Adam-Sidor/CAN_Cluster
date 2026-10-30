@@ -564,9 +564,7 @@ bool readLine(Stream& input, LineReader& reader) {
   while (input.available()) {
     char inChar = (char)input.read();
     reader.bytesReceived++;
-    if (inChar == '\r')
-      continue;
-    if (inChar == '\n') {
+    if (inChar == '\n' || inChar == '\r') {  // some terminals end lines with CR only, empty lines are ignored
       bool complete = !reader.overflow && reader.length > 0;
       reader.buffer[reader.length] = '\0';
       reader.length = 0;
@@ -582,10 +580,10 @@ bool readLine(Stream& input, LineReader& reader) {
 }
 
 void processLine(const char* line) {
+  if (catchCheckControlScan(line))
+    return;  // checked before "can" command, "ccScan" contains "can"
   if (catchRawFrame(line))
     return;  // test command, hex data could look like other values (e.g. "cc...")
-  if (catchCheckControlScan(line))
-    return;
   if (strcmp(line, "ota") == 0) {
     startOta();
     return;
@@ -707,14 +705,14 @@ bool catchRawFrame(const char* line) {
       p++;
   }
   if (*end != ':' || id > 0x7FF || (*p != '\0' && !isspace((unsigned char)*p))) {
-    Serial.println("CAN> wrong command, use can<ID>:<data>[x<count>], e.g. can592:401F0031FFFFFFFFx20");
+    printBoth("CAN> wrong command, use can<ID>:<data>[x<count>], e.g. can592:401F0031FFFFFFFFx20\n");
     return true;
   }
 
-  Serial.printf("CAN> %03lX [%d]", frame.id, frame.length);
+  char dataText[25] = "";
   for (int n = 0; n < frame.length; n++)
-    Serial.printf(" %02X", frame.data[n]);
-  Serial.printf(" x%u\n", frame.remaining);
+    sprintf(dataText + n * 3, " %02X", frame.data[n]);
+  printBoth("CAN> %03lX [%d]%s x%u\n", frame.id, frame.length, dataText, frame.remaining);
   injectedFrame = frame;
   timeToInjectedFrame = millis() - CAN_INJECT_INTERVAL;  // send immediately
   return true;
@@ -753,7 +751,7 @@ void setCheckControl(int id, bool on) {
   if (!on)
     return;
   if (ccCount >= CC_SLOTS) {
-    Serial.println("CC> too many active messages");
+    printBoth("CC> too many active messages\n");
     return;
   }
   ccActive[ccCount++] = id;
@@ -781,11 +779,11 @@ bool catchCheckControlScan(const char* line) {
   unsigned long interval = CC_SCAN_INTERVAL;
   int parsed = sscanf(where + 6, "%d-%d:%lu", &from, &to, &interval);
   if (parsed == 1 && from == 0) {
-    Serial.println("CC scan> stopped");
+    printBoth("CC scan> stopped\n");
     return true;
   }
   if (parsed < 2 || from <= 0 || to < from || to > 0xFFFF || interval < 100) {
-    Serial.println("CC scan> wrong command, use ccScan<from>-<to>[:<ms>], e.g. ccScan20-60, ccScan0 stops");
+    printBoth("CC scan> wrong command, use ccScan<from>-<to>[:<ms>], e.g. ccScan20-60, ccScan0 stops\n");
     return true;
   }
   ccScan.id = from - 1;
@@ -800,33 +798,38 @@ void stepCheckControlScan() {
   setCheckControl(ccScan.id, false);
   if (ccScan.id >= ccScan.last) {
     ccScan.id = 0;
-    Serial.println("CC scan> done");
+    printBoth("CC scan> done\n");
     return;
   }
   ccScan.id++;
-  Serial.printf("CC scan> %d (last %d)\n", ccScan.id, ccScan.last);
+  printBoth("CC scan> %d (last %d)\n", ccScan.id, ccScan.last);
   setCheckControl(ccScan.id, true);
 }
 
-// Status messages of OTA go to USB and Bluetooth, the "ota" command can come from either.
-void otaPrint(const char* text) {
-  Serial.println(text);
-  SerialBT.println(text);
+// Replies to commands go to USB and Bluetooth, a command can come from either.
+void printBoth(const char* format, ...) {
+  char text[128];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(text, sizeof(text), format, args);
+  va_end(args);
+  Serial.print(text);
+  SerialBT.print(text);
 }
 
 // "ota" command: connects to Wi-Fi from secrets.h and waits OTA_TIMEOUT ms for an upload
 // from Arduino IDE (network port BT_NAME). Wi-Fi stays off otherwise, so it does not disturb Bluetooth.
 void startOta() {
   if (!OTA_AVAILABLE) {
-    otaPrint("OTA> no secrets.h, OTA is not built in");
+    printBoth("OTA> no secrets.h, OTA is not built in\n");
     return;
   }
 #if OTA_AVAILABLE
   if (otaState != OTA_OFF) {
-    otaPrint("OTA> already running");
+    printBoth("OTA> already running\n");
     return;
   }
-  otaPrint("OTA> connecting to Wi-Fi " WIFI_SSID);
+  printBoth("OTA> connecting to Wi-Fi " WIFI_SSID "\n");
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(BT_NAME);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -848,27 +851,24 @@ void handleOta() {
     return;
   if (millis() - otaStartTime >= OTA_TIMEOUT) {
     stopOta();
-    otaPrint("OTA> timeout, Wi-Fi off");
+    printBoth("OTA> timeout, Wi-Fi off\n");
     return;
   }
   if (otaState == OTA_CONNECTING && WiFi.status() == WL_CONNECTED) {
     ArduinoOTA.setHostname(BT_NAME);
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.onStart([]() {
-      otaPrint("OTA> upload started");
+      printBoth("OTA> upload started\n");
     });
     ArduinoOTA.onEnd([]() {
-      otaPrint("OTA> upload done, restarting");
+      printBoth("OTA> upload done, restarting\n");
     });
     ArduinoOTA.onError([](ota_error_t error) {
-      Serial.printf("OTA> error %u\n", error);
-      SerialBT.printf("OTA> error %u\n", error);
+      printBoth("OTA> error %u\n", error);
     });
     ArduinoOTA.begin();
     otaState = OTA_READY;
-    char text[64];
-    snprintf(text, sizeof(text), "OTA> ready, IP %s", WiFi.localIP().toString().c_str());
-    otaPrint(text);
+    printBoth("OTA> ready, IP %s\n", WiFi.localIP().toString().c_str());
   }
   if (otaState == OTA_READY)
     ArduinoOTA.handle();
