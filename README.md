@@ -130,7 +130,31 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
 
   Forza Horizon 5 (`CurrentGame` = `FH5`) has no launch control in its telemetry, so it is detected from the inputs: speed < 5 km/h, throttle > 90 % and handbrake pulled light CC-ID 446 (checkered flag). FH5 also sends no lights, so the dashboard backlight is kept on as with parking lights.
 
-  Other IDs tested on the cluster: 28 (oil level), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
+  Other IDs tested on the cluster (found with `ccScan`, not used yet):
+
+  | CC-ID | Shown on the cluster |
+  |---|---|
+  | 28 | Oil level |
+  | 42 | ABS + DSC triangle + red brake (handbrake) light |
+  | 139 | Low tyre pressure with the wheel indicated (veikkos lists 140, 141, 143 for the other wheels) |
+  | 147 | Low tyre pressure, all wheels |
+  | 165 | Cold weather |
+  | 166 | Coolant level |
+  | 169 | Yellow exclamation mark |
+  | 184 | DTC |
+  | 195 | Parking sensors (PDC) |
+  | 236 | ABS + DSC triangle + yellow brake (handbrake) light |
+  | 259 | Windscreen |
+  | 336 | Low tyre pressure (small light) |
+  | 349 | Shift into "P" |
+  | 374 | Automatic high beam |
+  | 393 | Gear selector (R N D) |
+  | 423 | Trailer hitch |
+  | 508 | Hazard lights |
+  | 692 | Skid (slippery road) |
+  | 715, 716 | Door open (left, right) |
+
+  The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
 * Fuel consumption (`fuelRate<µl/s>`, also in the Uno version) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
 * After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.
 * When Bluetooth disconnects, the speedometer and tachometer drop to zero.
