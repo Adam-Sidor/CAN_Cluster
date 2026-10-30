@@ -14,6 +14,7 @@
 #define IRQ_PIN 4  // INT is only needed for receiving, can stay unconnected
 #define BT_NAME "CAN_Cluster"
 #define ECHO_INPUT true  // send every received line back (visible in SimHub log)
+#define DEBUG_BT_TO_USB true  // print every line received over Bluetooth on USB Serial
 #define BLINKER_INTERVAL 650
 #define LINE_BUFFER_SIZE 128
 
@@ -29,6 +30,7 @@ struct LineReader {
   char buffer[LINE_BUFFER_SIZE];
   size_t length;
   bool overflow;
+  uint32_t bytesReceived;
 };
 LineReader btReader = {};
 LineReader usbReader = {};
@@ -65,12 +67,18 @@ void loop() {
   if (readLine(SerialBT, btReader)) {
     processLine(btReader.buffer);
     if (ECHO_INPUT) SerialBT.println(btReader.buffer);
+    if (DEBUG_BT_TO_USB) {
+      Serial.print("BT> ");
+      Serial.println(btReader.buffer);
+    }
   }
   if (readLine(Serial, usbReader)) {
     processLine(usbReader.buffer);
     if (ECHO_INPUT) Serial.println(usbReader.buffer);
   }
   checkBluetoothConnection();
+  if (DEBUG_BT_TO_USB)
+    reportBluetoothTraffic();
 
   if (millis() - timestamp100ms > 99) {
     sendIgnitionKeyOn();
@@ -346,6 +354,7 @@ void sendEngineTemp() {
 bool readLine(Stream& input, LineReader& reader) {
   while (input.available()) {
     char inChar = (char)input.read();
+    reader.bytesReceived++;
     if (inChar == '\r')
       continue;
     if (inChar == '\n') {
@@ -412,15 +421,17 @@ void processLine(const char* line) {
 }
 
 // Finds "<valName><number>" in line, e.g. "rpm2300". Name without a number is ignored.
+// SimHub can glue several updates of one value into a line ("speed100speed0"), so the last one wins.
 bool catchValue(const char* line, const char* valName, int& value) {
-  const char* where = strstr(line, valName);
-  if (where == NULL)
-    return false;
-  where += strlen(valName);
-  if (!isdigit((unsigned char)*where))
-    return false;
-  value = atoi(where);
-  return true;
+  bool found = false;
+  size_t nameLength = strlen(valName);
+  for (const char* where = strstr(line, valName); where != NULL; where = strstr(where + nameLength, valName)) {
+    if (isdigit((unsigned char)where[nameLength])) {
+      value = atoi(where + nameLength);
+      found = true;
+    }
+  }
+  return found;
 }
 
 // Accepts "time15:42:07" as well as "time03:42:07 PM" / "time3:42:07 PM".
@@ -459,4 +470,22 @@ void checkBluetoothConnection() {
       }
     }
   }
+}
+
+// Once per second prints how many bytes came over Bluetooth and an unfinished line, if any
+// (helps to tell "nothing arrives" from "data arrives without a newline").
+void reportBluetoothTraffic() {
+  static uint32_t lastReport = 0;
+  if (millis() - lastReport < 1000)
+    return;
+  lastReport = millis();
+  if (btReader.bytesReceived == 0)
+    return;
+  Serial.printf("BT bytes in last second: %lu\n", (unsigned long)btReader.bytesReceived);
+  if (btReader.length > 0) {
+    Serial.print("BT waiting for newline: ");
+    Serial.write((const uint8_t*)btReader.buffer, btReader.length);
+    Serial.println();
+  }
+  btReader.bytesReceived = 0;
 }
