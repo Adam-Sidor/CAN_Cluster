@@ -4,6 +4,8 @@
 #define hi8(x) (uint8_t)(((x) >> 8) & 0xff)
 #define CS_PIN 10
 #define IRQ_PIN 2
+#define BLINKER_INTERVAL 650
+#define LINE_BUFFER_SIZE 128
 
 // timers
 uint32_t timestamp100ms = 0;
@@ -11,8 +13,12 @@ uint32_t timestamp200ms = 0;
 uint32_t timeToBlinkers = 0;
 
 // Serial
-bool stringComplete = false;
-String inputString = "";
+struct LineReader {
+  char buffer[LINE_BUFFER_SIZE];
+  size_t length;
+  bool overflow;
+};
+LineReader serialReader = {};
 
 // values
 int speed = 0, handBrake = 0, rpm = 0, fuelLevel = 100;
@@ -27,7 +33,6 @@ uint8_t tempCounter = 0x63;
 
 void setup() {
   Serial.begin(115200);
-  inputString.reserve(200);
   CAN.setPins(CS_PIN, IRQ_PIN);
   CAN.setSPIFrequency(1E6);
   while (!CAN.begin(100E3)) {
@@ -41,54 +46,9 @@ void setup() {
 }
 
 void loop() {
-  if (stringComplete) {
-    if (catchValue("speed") >= 0)
-      speed = catchValue("speed");
-    if (catchValue("rpm") >= 0)
-      rpm = catchValue("rpm");
-    if (catchValue("handBrake") >= 0)
-      handBrake = catchValue("handBrake");
-    if (catchValue("blinkers") >= 0) {
-      blinkers = catchValue("blinkers");
-      firstBlink = true;
-      timeToBlinkers = millis();
-    }
-    if (catchValue("fuel") >= 0)
-      fuelLevel = catchValue("fuel");
-    if (catchValue("lights") >= 0) {
-      switch (catchValue("lights")) {
-        case 0:
-          lightMode[0] = true;
-          lightMode[1] = false;
-          lightMode[3] = false;
-          break;
-        case 1:
-          lightMode[1] = true;
-          lightMode[0] = false;
-          lightMode[3] = false;
-          break;
-        case 2:
-          lightMode[3] = true;
-          lightMode[1] = true;
-          break;
-        case 3:
-          lightMode[2] = true;
-          break;
-        case 4:
-          lightMode[2] = false;
-          break;
-        case 5:
-          lightMode[4] = true;
-          break;
-        case 6:
-          lightMode[4] = false;
-          break;
-      }
-    }
-    catchTime();
-    Serial.println(inputString);
-    inputString = "";
-    stringComplete = false;
+  if (readLine(Serial, serialReader)) {
+    processLine(serialReader.buffer);
+    Serial.println(serialReader.buffer);
   }
   if (millis() - timestamp100ms > 99) {
     sendIgnitionKeyOn();
@@ -108,28 +68,23 @@ void loop() {
     sendFuelLevel(fuelLevel);
     timestamp200ms = millis();
   }
-  switch (blinkers) {
-    case 0:
-      sendTurnOffBlinkers();
-      break;
-    case 1:
-      if (millis() - timeToBlinkers > 650) {
+  // blinker frame is sent at a fixed interval also when blinkers are off (previously it flooded the bus)
+  if (millis() - timeToBlinkers >= BLINKER_INTERVAL) {
+    switch (blinkers) {
+      case 0:
+        sendTurnOffBlinkers();
+        break;
+      case 1:
         sendLeftBlinker();
-        timeToBlinkers = millis();
-      }
-      break;
-    case 2:
-      if (millis() - timeToBlinkers > 650) {
+        break;
+      case 2:
         sendRightBlinker();
-        timeToBlinkers = millis();
-      }
-      break;
-    case 3:
-      if (millis() - timeToBlinkers > 650) {
+        break;
+      case 3:
         sendHazzard();
-        timeToBlinkers = millis();
-      }
-      break;
+        break;
+    }
+    timeToBlinkers = millis();
   }
 }
 
@@ -233,7 +188,7 @@ void sendRPM(uint16_t rpm) {
   CAN.endPacket();
 }
 void sendFuelLevel(int percent) {
-  percent = map(percent, 0, 100, 0, 50);
+  percent = map(constrain(percent, 0, 100), 0, 100, 0, 50);
   uint16_t sensor = percent * 160;
 
   CAN.beginPacket(0x349);
@@ -363,35 +318,107 @@ void sendEngineTemp() {
   tempCounter++;
 }
 // Serial functions
-int catchValue(String valName) {
-  String inputValue = "-1";
-  int where=inputString.indexOf(valName);
-  if (where != -1) {
-    inputValue = inputString.substring(where+valName.length(), inputString.length());
+// Collects characters into a fixed buffer (no String, no heap fragmentation).
+// Returns true when a complete line is in reader.buffer.
+bool readLine(Stream& input, LineReader& reader) {
+  while (input.available()) {
+    char inChar = (char)input.read();
+    if (inChar == '\r')
+      continue;
+    if (inChar == '\n') {
+      bool complete = !reader.overflow && reader.length > 0;
+      reader.buffer[reader.length] = '\0';
+      reader.length = 0;
+      reader.overflow = false;
+      if (complete)
+        return true;
+    } else if (reader.length < LINE_BUFFER_SIZE - 1) {
+      reader.buffer[reader.length++] = inChar;
+    } else
+      reader.overflow = true;  // drop the rest of a too long line
   }
-  if(inputValue!="")
-    return inputValue.toInt();
-  else
-   return -1;
+  return false;
 }
 
-void catchTime() {
-  int where=inputString.indexOf("time");
-  String inputHour = "0", inputMinute = "0";
-  if (where != -1) {
-    inputHour = inputString.substring(where+4, where+6);
-    inputMinute = inputString.substring(where+7, where+9);
-    hour = inputHour.toInt();
-    minute = inputMinute.toInt();
-    if (inputString[where+13] == 'P') hour += 12;
+void processLine(const char* line) {
+  int value;
+  if (catchValue(line, "speed", value))
+    speed = value;
+  if (catchValue(line, "rpm", value))
+    rpm = value;
+  if (catchValue(line, "handBrake", value))
+    handBrake = value;
+  if (catchValue(line, "blinkers", value) && value != blinkers) {
+    blinkers = value;
+    firstBlink = true;
+    timeToBlinkers = millis() - BLINKER_INTERVAL;  // send new state immediately
   }
+  if (catchValue(line, "fuel", value))
+    fuelLevel = value;
+  if (catchValue(line, "lights", value)) {
+    switch (value) {
+      case 0:
+        lightMode[0] = true;
+        lightMode[1] = false;
+        lightMode[3] = false;
+        break;
+      case 1:
+        lightMode[1] = true;
+        lightMode[0] = false;
+        lightMode[3] = false;
+        break;
+      case 2:
+        lightMode[3] = true;
+        lightMode[1] = true;
+        break;
+      case 3:
+        lightMode[2] = true;
+        break;
+      case 4:
+        lightMode[2] = false;
+        break;
+      case 5:
+        lightMode[4] = true;
+        break;
+      case 6:
+        lightMode[4] = false;
+        break;
+    }
+  }
+  catchTime(line);
 }
-void serialEvent() {
-  while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      stringComplete = true;
-    } else
-      inputString += inChar;
+
+// Finds "<valName><number>" in line, e.g. "rpm2300". Name without a number is ignored.
+// SimHub can glue several updates of one value into a line ("speed100speed0"), so the last one wins.
+bool catchValue(const char* line, const char* valName, int& value) {
+  bool found = false;
+  size_t nameLength = strlen(valName);
+  for (const char* where = strstr(line, valName); where != NULL; where = strstr(where + nameLength, valName)) {
+    if (isdigit((unsigned char)where[nameLength])) {
+      value = atoi(where + nameLength);
+      found = true;
+    }
   }
+  return found;
+}
+
+// Accepts "time15:42:07" as well as "time03:42:07 PM" / "time3:42:07 PM".
+void catchTime(const char* line) {
+  const char* where = strstr(line, "time");
+  if (where == NULL)
+    return;
+  where += 4;
+  int inputHour, inputMinute;
+  if (sscanf(where, "%d:%d", &inputHour, &inputMinute) != 2)
+    return;
+  const char* pm = strstr(where, "PM");
+  const char* am = strstr(where, "AM");
+  if (pm != NULL && pm - where <= 12 && inputHour < 12)
+    inputHour += 12;  // 1 PM -> 13, 12 PM stays 12
+  else if (am != NULL && am - where <= 12 && inputHour == 12)
+    inputHour = 0;  // 12 AM -> 0
+  if (inputHour < 0 || inputHour > 23 || inputMinute < 0 || inputMinute > 59)
+    return;
+  hour = inputHour;
+  minute = inputMinute;
 }
