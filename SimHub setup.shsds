@@ -73,6 +73,20 @@
     },
     {
       "Message": {
+        "Expression": "'cruise' + if(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.CruiseControl], false), 1, 0) + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "'cruiseSpeed' + round(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.CruiseControlSpeed.Kph], 0), 0) + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
         "Expression": "'\\n'"
       },
       "IsEnabled": true,

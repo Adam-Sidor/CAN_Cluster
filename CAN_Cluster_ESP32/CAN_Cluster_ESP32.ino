@@ -15,7 +15,9 @@
 #define BT_NAME "CAN_Cluster"
 #define ECHO_INPUT true  // send every received line back (visible in SimHub log)
 #define DEBUG_BT_TO_USB true  // print every line received over Bluetooth on USB Serial
+#define DEBUG_CAN_RX false  // print frames sent by the cluster on USB Serial (e.g. check control 0x338)
 #define BLINKER_INTERVAL 650
+#define CAN_RX_PRINT_INTERVAL 2000  // the same CAN ID is printed at most once per this time
 #define LINE_BUFFER_SIZE 128
 
 BluetoothSerial SerialBT;
@@ -42,6 +44,9 @@ short blinkers = 0;
 bool firstBlink = true;
 uint8_t hour = 0, minute = 0;
 bool lightMode[5] = { false, true, false, false, false };
+bool cruiseActive = false;
+int cruiseSpeed = 0;  // km/h
+uint32_t cruiseRefreshInterval = 1000;
 
 // CAN variables
 uint8_t abs_frame = 0xB3;
@@ -79,6 +84,8 @@ void loop() {
   checkBluetoothConnection();
   if (DEBUG_BT_TO_USB)
     reportBluetoothTraffic();
+  if (DEBUG_CAN_RX)
+    reportCanFrames();
 
   if (millis() - timestamp100ms > 99) {
     sendIgnitionKeyOn();
@@ -96,6 +103,7 @@ void loop() {
     sendEngineTemp();
     sendTime();
     sendFuelLevel(fuelLevel);
+    sendCruiseControl();
     timestamp200ms = millis();
   }
   // blinker frame is sent at a fixed interval also when blinkers are off (previously it flooded the bus)
@@ -348,6 +356,71 @@ void sendEngineTemp() {
   tempCounter++;
 }
 
+// Cruise control status from DME (flags from commaai/opendbc bmw_e9x_e8x.dbc, speed scale tested on the cluster).
+// Without this frame the cluster shows CC-ID 26 "cruise control failure" after power-up.
+// byte 0 + low nibble of byte 1: set speed in 1/16 mph, byte 1 bit 4 inactive / bit 5 active.
+// km/h are sent 1:1 as mph, so the cluster shows the same number as the game (only the unit label differs).
+// The cluster shows the set speed only for a moment after it changes, so while cruise is active
+// the lowest 1/16 bit is toggled every cruiseRefreshInterval ms - the displayed number stays the same,
+// but the message is shown again. 0 disables it ("cruiseRefresh<ms>" over serial).
+void sendCruiseControl() {
+  static uint32_t lastToggle = 0;
+  static uint8_t fraction = 0;
+  if (cruiseActive && cruiseRefreshInterval > 0 && millis() - lastToggle >= cruiseRefreshInterval) {
+    fraction ^= 1;
+    lastToggle = millis();
+  }
+  uint16_t setSpeed = cruiseActive ? constrain(cruiseSpeed, 0, 255) * 16 + fraction : 0;
+
+  CAN.beginPacket(0x200);
+  CAN.write(lo8(setSpeed));
+  CAN.write((cruiseActive ? 0x20 : 0x10) | (hi8(setSpeed) & 0x0F));
+  for (int i = 0; i < 6; i++)
+    CAN.write(0x00);
+  CAN.endPacket();
+}
+
+// Prints frames sent by the cluster itself (e.g. check control / error messages).
+// Each ID is printed when first seen and then at most once per CAN_RX_PRINT_INTERVAL.
+void reportCanFrames() {
+  struct SeenId {
+    long id;
+    uint32_t lastPrint;
+  };
+  static SeenId seen[40];
+  static uint8_t seenCount = 0;
+
+  for (int i = 0; i < 4; i++) {
+    int size = CAN.parsePacket();
+    if (size < 0 || (size == 0 && !CAN.packetRtr()))
+      return;
+    long id = CAN.packetId();
+    uint8_t data[8];
+    int length = 0;
+    while (CAN.available() && length < 8)
+      data[length++] = CAN.read();
+
+    SeenId* entry = NULL;
+    for (uint8_t n = 0; n < seenCount; n++)
+      if (seen[n].id == id)
+        entry = &seen[n];
+    if (entry == NULL && seenCount < 40) {
+      entry = &seen[seenCount++];
+      entry->id = id;
+      entry->lastPrint = millis() - CAN_RX_PRINT_INTERVAL;
+    }
+    if (entry != NULL && millis() - entry->lastPrint < CAN_RX_PRINT_INTERVAL)
+      continue;
+    if (entry != NULL)
+      entry->lastPrint = millis();
+
+    Serial.printf("CAN< %03lX [%d]", id, length);
+    for (int n = 0; n < length; n++)
+      Serial.printf(" %02X", data[n]);
+    Serial.println();
+  }
+}
+
 // Serial functions
 // Collects characters into a fixed buffer (no String, no heap fragmentation).
 // Returns true when a complete line is in reader.buffer.
@@ -387,6 +460,12 @@ void processLine(const char* line) {
   }
   if (catchValue(line, "fuel", value))
     fuelLevel = value;
+  if (catchValue(line, "cruise", value))
+    cruiseActive = value;
+  if (catchValue(line, "cruiseSpeed", value))
+    cruiseSpeed = value;
+  if (catchValue(line, "cruiseRefresh", value))
+    cruiseRefreshInterval = value;
   if (catchValue(line, "lights", value)) {
     switch (value) {
       case 0:
@@ -464,6 +543,7 @@ void checkBluetoothConnection() {
     if (!connected) {
       speed = 0;
       rpm = 0;
+      cruiseActive = false;
       if (blinkers != 0) {
         blinkers = 0;
         firstBlink = true;

@@ -121,6 +121,7 @@ Some features may not work depending on the game!
   * Clock displaying computer system time
   * Handbrake indicator
   * Turn signals and hazard lights
+  * Cruise control set speed shown on the display while cruise is active (ESP32 version, ETS2/ATS; km/h shown as mph 1:1) - this also removes the cruise control error shown after power-up
   * Lights:
 
     * Parking lights
