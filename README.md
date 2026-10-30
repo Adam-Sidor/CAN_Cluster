@@ -134,10 +134,17 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
 * Fuel consumption (`fuelRate<µl/s>`, also in the Uno version) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
 * After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.
 * When Bluetooth disconnects, the speedometer and tachometer drop to zero.
+* OTA updates over Wi-Fi (the code can be uploaded without a USB cable):
+
+  * Select `Tools > Partition Scheme > Minimal SPIFFS (1.9MB APP with OTA)` - with Wi-Fi and Bluetooth the sketch does not fit the default partition. The first upload with OTA has to be done over USB.
+  * Copy `secrets.example.h` as `secrets.h` in the sketch folder and fill in the Wi-Fi name, password and OTA password. `secrets.h` is ignored by git. Without it the sketch builds without OTA.
+  * Send `ota` over USB serial or Bluetooth (e.g., from a Bluetooth serial terminal). The ESP32 connects to Wi-Fi and prints `OTA> ready, IP ...`. Wi-Fi is otherwise off, so it does not disturb Bluetooth.
+  * In Arduino IDE select the network port `CAN_Cluster at <IP>` and upload as usual (the IDE asks for the OTA password). The ESP32 restarts after the upload. When no upload starts within 5 minutes, Wi-Fi is turned off again.
 * Debugging tools (USB serial monitor, 115200 baud, line ending `Newline`):
 
   * With `DEBUG_CAN_RX` enabled, frames sent by the cluster itself are printed as `CAN< ID [length] data`. Each ID is printed at most once per 2 s, `0x338` (check control messages) also on every change. Requires the MISO line to be connected.
   * The `can<ID>:<data>[x<count>]` command (ID and data in hex) sends any frame to the cluster, e.g. `can592:401F0031FFFFFFFF` sends it once (check engine message on) and `can592:401F0031FFFFFFFFx20` 20 times every 100 ms; `x0` stops a repeated frame. It works over Bluetooth too and is meant for finding unknown frames.
+  * The `ccScan<from>-<to>[:<ms>]` command shows check control IDs one by one (3 s each by default) and prints the current one as `CC scan> ID`, e.g. `ccScan20-60` or `ccScan300-400:5000`; `ccScan0` stops it. Run it over USB with SimHub disconnected, otherwise its `ccOff...` messages turn off the scanned ID.
 
 ---
 

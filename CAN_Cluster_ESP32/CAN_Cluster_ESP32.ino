@@ -2,7 +2,18 @@
 // BMW E90 cluster driven by MCP2515 module over SPI.
 // Requires the original ESP32 (S2/S3/C3/C6 have no Bluetooth Classic).
 #include <BluetoothSerial.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
 #include "MCP2515.h"
+
+// Wi-Fi credentials for OTA updates (secrets.h is not in the repository, copy it from secrets.example.h).
+// Without it the sketch builds without OTA.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#define OTA_AVAILABLE true
+#else
+#define OTA_AVAILABLE false
+#endif
 
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED) || !defined(CONFIG_BT_SPP_ENABLED)
 #error Bluetooth Classic (SPP) is not available - use the original ESP32 board.
@@ -23,8 +34,10 @@
 #define LINE_BUFFER_SIZE 128
 #define CC_SLOTS 16  // max active check control messages at a time
 #define CC_REFRESH_INTERVAL 1000  // active messages are repeated, otherwise the cluster drops them
+#define CC_SCAN_INTERVAL 3000  // default time each ID is shown by "ccScan" command
 #define SUPPRESS_SERVICE_LIGHT true  // hide "!" service reminder (CC-ID 281) shown after every ignition on
 #define SERVICE_LIGHT_ID 281
+#define OTA_TIMEOUT 300000  // Wi-Fi is turned off again when no upload starts within this time after "ota"
 
 BluetoothSerial SerialBT;
 
@@ -35,6 +48,7 @@ uint32_t timeToBlinkers = 0;
 uint32_t timeToInjectedFrame = 0;
 uint32_t timestamp500ms = 0;
 uint32_t timeToCheckControl = 0;
+uint32_t timeToCcScan = 0;
 
 // Serial
 struct LineReader {
@@ -70,6 +84,17 @@ struct InjectedFrame {
 InjectedFrame injectedFrame = {};
 uint16_t ccActive[CC_SLOTS];
 uint8_t ccCount = 0;
+struct CcScan {
+  int id;  // currently shown ID, 0 = scan not running
+  int last;
+  uint32_t interval;
+};
+CcScan ccScan = {};
+
+// OTA
+enum OtaState { OTA_OFF, OTA_CONNECTING, OTA_READY };
+OtaState otaState = OTA_OFF;
+uint32_t otaStartTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -101,6 +126,7 @@ void loop() {
     if (ECHO_INPUT) Serial.println(usbReader.buffer);
   }
   checkBluetoothConnection();
+  handleOta();
   if (DEBUG_BT_TO_USB)
     reportBluetoothTraffic();
   if (DEBUG_CAN_RX)
@@ -149,6 +175,10 @@ void loop() {
     if (SUPPRESS_SERVICE_LIGHT && !isCheckControlActive(SERVICE_LIGHT_ID))
       sendCheckControl(SERVICE_LIGHT_ID, false);
     timestamp500ms = millis();
+  }
+  if (ccScan.id > 0 && millis() - timeToCcScan >= ccScan.interval) {
+    stepCheckControlScan();
+    timeToCcScan = millis();
   }
   if (ccCount > 0 && millis() - timeToCheckControl >= CC_REFRESH_INTERVAL) {
     for (uint8_t i = 0; i < ccCount; i++)
@@ -554,6 +584,12 @@ bool readLine(Stream& input, LineReader& reader) {
 void processLine(const char* line) {
   if (catchRawFrame(line))
     return;  // test command, hex data could look like other values (e.g. "cc...")
+  if (catchCheckControlScan(line))
+    return;
+  if (strcmp(line, "ota") == 0) {
+    startOta();
+    return;
+  }
   int value;
   if (catchValue(line, "speed", value))
     speed = value;
@@ -727,6 +763,116 @@ void setCheckControl(int id, bool on) {
 void clearCheckControl() {
   while (ccCount > 0)
     sendCheckControl(ccActive[--ccCount], false);
+}
+
+// Test command for finding check control IDs: "ccScan<from>-<to>[:<ms>]" shows the IDs one by one
+// (each for CC_SCAN_INTERVAL ms or <ms>) and prints the current one, "ccScan0" stops the scan.
+// E.g. "ccScan20-60", "ccScan300-400:5000". Best run over USB with SimHub disconnected,
+// otherwise its "ccOff..." messages turn off the scanned ID.
+// Returns true when the line was a "ccScan" command (also a wrong one).
+bool catchCheckControlScan(const char* line) {
+  const char* where = strstr(line, "ccScan");
+  if (where == NULL)
+    return false;
+  if (ccScan.id > 0)
+    setCheckControl(ccScan.id, false);
+  ccScan.id = 0;
+  int from, to;
+  unsigned long interval = CC_SCAN_INTERVAL;
+  int parsed = sscanf(where + 6, "%d-%d:%lu", &from, &to, &interval);
+  if (parsed == 1 && from == 0) {
+    Serial.println("CC scan> stopped");
+    return true;
+  }
+  if (parsed < 2 || from <= 0 || to < from || to > 0xFFFF || interval < 100) {
+    Serial.println("CC scan> wrong command, use ccScan<from>-<to>[:<ms>], e.g. ccScan20-60, ccScan0 stops");
+    return true;
+  }
+  ccScan.id = from - 1;
+  ccScan.last = to;
+  ccScan.interval = interval;
+  stepCheckControlScan();
+  timeToCcScan = millis();
+  return true;
+}
+
+void stepCheckControlScan() {
+  setCheckControl(ccScan.id, false);
+  if (ccScan.id >= ccScan.last) {
+    ccScan.id = 0;
+    Serial.println("CC scan> done");
+    return;
+  }
+  ccScan.id++;
+  Serial.printf("CC scan> %d (last %d)\n", ccScan.id, ccScan.last);
+  setCheckControl(ccScan.id, true);
+}
+
+// Status messages of OTA go to USB and Bluetooth, the "ota" command can come from either.
+void otaPrint(const char* text) {
+  Serial.println(text);
+  SerialBT.println(text);
+}
+
+// "ota" command: connects to Wi-Fi from secrets.h and waits OTA_TIMEOUT ms for an upload
+// from Arduino IDE (network port BT_NAME). Wi-Fi stays off otherwise, so it does not disturb Bluetooth.
+void startOta() {
+  if (!OTA_AVAILABLE) {
+    otaPrint("OTA> no secrets.h, OTA is not built in");
+    return;
+  }
+#if OTA_AVAILABLE
+  if (otaState != OTA_OFF) {
+    otaPrint("OTA> already running");
+    return;
+  }
+  otaPrint("OTA> connecting to Wi-Fi " WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(BT_NAME);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  otaState = OTA_CONNECTING;
+  otaStartTime = millis();
+#endif
+}
+
+void stopOta() {
+  ArduinoOTA.end();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  otaState = OTA_OFF;
+}
+
+void handleOta() {
+#if OTA_AVAILABLE
+  if (otaState == OTA_OFF)
+    return;
+  if (millis() - otaStartTime >= OTA_TIMEOUT) {
+    stopOta();
+    otaPrint("OTA> timeout, Wi-Fi off");
+    return;
+  }
+  if (otaState == OTA_CONNECTING && WiFi.status() == WL_CONNECTED) {
+    ArduinoOTA.setHostname(BT_NAME);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+    ArduinoOTA.onStart([]() {
+      otaPrint("OTA> upload started");
+    });
+    ArduinoOTA.onEnd([]() {
+      otaPrint("OTA> upload done, restarting");
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+      Serial.printf("OTA> error %u\n", error);
+      SerialBT.printf("OTA> error %u\n", error);
+    });
+    ArduinoOTA.begin();
+    otaState = OTA_READY;
+    char text[64];
+    snprintf(text, sizeof(text), "OTA> ready, IP %s", WiFi.localIP().toString().c_str());
+    otaPrint(text);
+  }
+  if (otaState == OTA_READY)
+    ArduinoOTA.handle();
+#endif
 }
 
 // Drops needles to zero when SimHub disconnects, otherwise the last values would stay on the cluster.
