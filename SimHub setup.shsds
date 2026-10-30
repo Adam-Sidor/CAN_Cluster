@@ -31,7 +31,7 @@
     },
     {
       "Message": {
-        "Expression": "'handBrake' + [Handbrake]"
+        "Expression": "'handBrake' + if([Handbrake] > 0 or isnull([GameRawData.TruckValues.CurrentValues.MotorValues.BrakeValues.ParkingBrake], false), 1, 0) + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
