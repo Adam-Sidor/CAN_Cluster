@@ -9,10 +9,11 @@ This project integrates Arduino Uno, a CAN module, and a BMW E90 car dashboard t
 1. [Project Description](#project-description)
 2. [Requirements](#requirements)
 3. [Installation](#installation)
-4. [Usage](#usage)
-5. [Features](#features)
-6. [License](#license)
-7. [Contact](#contact)
+4. [ESP32 Version (Bluetooth)](#esp32-version-bluetooth)
+5. [Usage](#usage)
+6. [Features](#features)
+7. [License](#license)
+8. [Contact](#contact)
 
 ---
 
@@ -72,6 +73,30 @@ Step-by-step instructions to set up and run the project:
    * To remove the low ambient temperature message, add a resistor with appropriate resistance, e.g., `6 kΩ`. The temperature on the dashboard depends on the chosen resistor. With this value, the displayed temperature is about 18 ℃.
    * Wiring diagram:
      ![Schematic](images/schematic.png)
+
+---
+
+## ESP32 Version (Bluetooth)
+
+The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data from SimHub wirelessly over Bluetooth (SPP serial port) and talks to the dashboard through the same MCP2515 module.
+
+* Requires the classic **ESP32** (e.g., ESP32-WROOM / DevKit V1). ESP32-S2/S3/C3/C6 chips do not support Bluetooth Classic.
+* The MCP2515 driver is included in the sketch folder - the `CAN-0.3.1` library is not needed (on ESP32 it uses the built-in controller instead of MCP2515).
+* Wiring the MCP2515 module to ESP32:
+
+  | MCP2515 | ESP32 |
+  |---|---|
+  | VCC | 5V (VIN) |
+  | GND | GND |
+  | CS | GPIO5 |
+  | SCK | GPIO18 |
+  | SI (MOSI) | GPIO23 |
+  | SO (MISO) | GPIO19 through a voltage divider (e.g., 1 kΩ from the module, 2 kΩ to GND) |
+  | INT | not connected (only used for receiving) |
+
+  The module must be powered from 5 V (required by the TJA1050 transceiver). 3.3 V signals from ESP32 are at the edge of the MCP2515 input threshold when it runs at 5 V - it usually works, but if the serial monitor shows `Connecting with CAN failed!`, check the wiring and the MISO divider.
+* After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.
+* When Bluetooth disconnects, the speedometer and tachometer drop to zero.
 
 ---
 
