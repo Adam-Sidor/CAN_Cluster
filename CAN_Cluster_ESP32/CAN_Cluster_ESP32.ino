@@ -15,10 +15,21 @@
 #define BT_NAME "CAN_Cluster"
 #define ECHO_INPUT true  // send every received line back (visible in SimHub log)
 #define DEBUG_BT_TO_USB true  // print every line received over Bluetooth on USB Serial
-#define DEBUG_CAN_RX false  // print frames sent by the cluster on USB Serial (e.g. check control 0x338)
+#define DEBUG_CAN_RX true  // print frames sent by the cluster on USB Serial (e.g. check control 0x338)
 #define BLINKER_INTERVAL 650
 #define CAN_RX_PRINT_INTERVAL 2000  // the same CAN ID is printed at most once per this time
+#define CAN_RX_WATCH_ID 0x338  // this ID is also printed on every data change (check control messages)
+#define CAN_INJECT_INTERVAL 100  // interval between repeats of a frame sent with "can..." command
 #define LINE_BUFFER_SIZE 128
+#define BC_ENTER_PIN 25  // MOSFET switching 1k between cluster pin 16 and GND (BC button)
+#define BC_UP_PIN 26  // 2k (up)
+#define BC_DOWN_PIN 27  // 3k (down)
+#define BC_PRESS_TIME 200  // "bc<button>" command
+#define BC_HOLD_TIME 2000  // "bcHold<button>" command (long press)
+#define CC_SLOTS 16  // max active check control messages at a time
+#define CC_REFRESH_INTERVAL 1000  // active messages are repeated, otherwise the cluster drops them
+#define SUPPRESS_SERVICE_LIGHT true  // hide "!" service reminder (CC-ID 281) shown after every ignition on
+#define SERVICE_LIGHT_ID 281
 
 BluetoothSerial SerialBT;
 
@@ -26,6 +37,9 @@ BluetoothSerial SerialBT;
 uint32_t timestamp100ms = 0;
 uint32_t timestamp200ms = 0;
 uint32_t timeToBlinkers = 0;
+uint32_t timeToInjectedFrame = 0;
+uint32_t timestamp500ms = 0;
+uint32_t timeToCheckControl = 0;
 
 // Serial
 struct LineReader {
@@ -47,14 +61,31 @@ bool lightMode[5] = { false, true, false, false, false };
 bool cruiseActive = false;
 int cruiseSpeed = 0;  // km/h
 uint32_t cruiseRefreshInterval = 1000;
+const uint8_t bcPins[3] = { BC_ENTER_PIN, BC_UP_PIN, BC_DOWN_PIN };
+int8_t bcActivePin = -1;
+uint32_t bcPressStart = 0;
+uint32_t bcPressLength = 0;
 
 // CAN variables
 uint8_t abs_frame = 0xB3;
 uint8_t tempCounter = 0x63;
+struct InjectedFrame {
+  long id;
+  uint8_t data[8];
+  uint8_t length;
+  uint16_t remaining;
+};
+InjectedFrame injectedFrame = {};
+uint16_t ccActive[CC_SLOTS];
+uint8_t ccCount = 0;
 
 void setup() {
   Serial.begin(115200);
   SerialBT.begin(BT_NAME);
+  for (uint8_t pin : bcPins) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  }
   CAN.setPins(CS_PIN, IRQ_PIN);
   CAN.setSPIFrequency(1E6);
   while (!CAN.begin(100E3)) {
@@ -82,6 +113,7 @@ void loop() {
     if (ECHO_INPUT) Serial.println(usbReader.buffer);
   }
   checkBluetoothConnection();
+  updateBcButton();
   if (DEBUG_BT_TO_USB)
     reportBluetoothTraffic();
   if (DEBUG_CAN_RX)
@@ -123,6 +155,20 @@ void loop() {
         break;
     }
     timeToBlinkers = millis();
+  }
+  if (millis() - timestamp500ms > 499) {
+    if (SUPPRESS_SERVICE_LIGHT && !isCheckControlActive(SERVICE_LIGHT_ID))
+      sendCheckControl(SERVICE_LIGHT_ID, false);
+    timestamp500ms = millis();
+  }
+  if (ccCount > 0 && millis() - timeToCheckControl >= CC_REFRESH_INTERVAL) {
+    for (uint8_t i = 0; i < ccCount; i++)
+      sendCheckControl(ccActive[i], true);
+    timeToCheckControl = millis();
+  }
+  if (injectedFrame.remaining > 0 && millis() - timeToInjectedFrame >= CAN_INJECT_INTERVAL) {
+    sendInjectedFrame();
+    timeToInjectedFrame = millis();
   }
 }
 
@@ -380,12 +426,36 @@ void sendCruiseControl() {
   CAN.endPacket();
 }
 
+// Check control message / warning light. Cluster confirms a shown message in 0x338.
+// IDs e.g. from veikkos/e90-can-cluster types.h: 31 check engine, 39 overheat, 212 oil, 213 battery,
+// 275 fuel, 281 service, 308 brake (red), 643 AdBlue.
+void sendCheckControl(uint16_t id, bool on) {
+  CAN.beginPacket(0x592);
+  CAN.write(0x40);
+  CAN.write(lo8(id));
+  CAN.write(hi8(id));
+  CAN.write(on ? 0x31 : 0x30);
+  for (int i = 0; i < 4; i++)
+    CAN.write(0xFF);
+  CAN.endPacket();
+}
+
+void sendInjectedFrame() {
+  CAN.beginPacket(injectedFrame.id);
+  CAN.write(injectedFrame.data, injectedFrame.length);
+  CAN.endPacket();
+  injectedFrame.remaining--;
+}
+
 // Prints frames sent by the cluster itself (e.g. check control / error messages).
-// Each ID is printed when first seen and then at most once per CAN_RX_PRINT_INTERVAL.
+// Each ID is printed when first seen and then at most once per CAN_RX_PRINT_INTERVAL,
+// CAN_RX_WATCH_ID additionally on every data change.
 void reportCanFrames() {
   struct SeenId {
     long id;
     uint32_t lastPrint;
+    uint8_t data[8];
+    uint8_t length;
   };
   static SeenId seen[40];
   static uint8_t seenCount = 0;
@@ -408,11 +478,16 @@ void reportCanFrames() {
       entry = &seen[seenCount++];
       entry->id = id;
       entry->lastPrint = millis() - CAN_RX_PRINT_INTERVAL;
+      entry->length = 0xFF;  // never equal to received data
     }
-    if (entry != NULL && millis() - entry->lastPrint < CAN_RX_PRINT_INTERVAL)
-      continue;
-    if (entry != NULL)
+    if (entry != NULL) {
+      bool changed = entry->length != length || memcmp(entry->data, data, length) != 0;
+      if (millis() - entry->lastPrint < CAN_RX_PRINT_INTERVAL && !(id == CAN_RX_WATCH_ID && changed))
+        continue;
       entry->lastPrint = millis();
+      memcpy(entry->data, data, length);
+      entry->length = length;
+    }
 
     Serial.printf("CAN< %03lX [%d]", id, length);
     for (int n = 0; n < length; n++)
@@ -446,6 +521,8 @@ bool readLine(Stream& input, LineReader& reader) {
 }
 
 void processLine(const char* line) {
+  if (catchRawFrame(line))
+    return;  // test command, hex data could look like other values (e.g. "bc1")
   int value;
   if (catchValue(line, "speed", value))
     speed = value;
@@ -466,6 +543,11 @@ void processLine(const char* line) {
     cruiseSpeed = value;
   if (catchValue(line, "cruiseRefresh", value))
     cruiseRefreshInterval = value;
+  if (catchValue(line, "bc", value))
+    pressBcButton(value, BC_PRESS_TIME);
+  if (catchValue(line, "bcHold", value))
+    pressBcButton(value, BC_HOLD_TIME);
+  catchCheckControl(line);
   if (catchValue(line, "lights", value)) {
     switch (value) {
       case 0:
@@ -534,6 +616,118 @@ void catchTime(const char* line) {
   minute = inputMinute;
 }
 
+// Test command for finding unknown frames: "can<ID>:<data>[x<count>]", ID and data in hex, count in decimal.
+// E.g. "can1EE:40FF" sends the frame once, "can1EE:40FFx20" 20 times every CAN_INJECT_INTERVAL ms
+// (some modules need a frame held for a while), "x0" stops the frame being repeated.
+// Returns true when the line was a "can" command (also a wrong one).
+bool catchRawFrame(const char* line) {
+  const char* where = strstr(line, "can");
+  if (where == NULL || !isxdigit((unsigned char)where[3]))
+    return false;
+  char* end;
+  long id = strtol(where + 3, &end, 16);
+  InjectedFrame frame = {};
+  frame.id = id;
+  frame.remaining = 1;
+  const char* p = end + 1;
+  while (*end == ':' && isxdigit((unsigned char)p[0]) && isxdigit((unsigned char)p[1]) && frame.length < 8) {
+    char byteText[3] = { p[0], p[1], '\0' };
+    frame.data[frame.length++] = strtol(byteText, NULL, 16);
+    p += 2;
+  }
+  if (*end == ':' && *p == 'x' && isdigit((unsigned char)p[1])) {
+    frame.remaining = constrain(atoi(p + 1), 0, 1000);
+    p++;
+    while (isdigit((unsigned char)*p))
+      p++;
+  }
+  if (*end != ':' || id > 0x7FF || (*p != '\0' && !isspace((unsigned char)*p))) {
+    Serial.println("CAN> wrong command, use can<ID>:<data>[x<count>], e.g. can1EE:40FFx20");
+    return true;
+  }
+
+  Serial.printf("CAN> %03lX [%d]", frame.id, frame.length);
+  for (int n = 0; n < frame.length; n++)
+    Serial.printf(" %02X", frame.data[n]);
+  Serial.printf(" x%u\n", frame.remaining);
+  injectedFrame = frame;
+  timeToInjectedFrame = millis() - CAN_INJECT_INTERVAL;  // send immediately
+  return true;
+}
+
+// Buttons on the turn signal stalk (BC, up, down) are not on CAN - they connect cluster pin 16
+// to GND through 1k, 2k or 3k. Each resistor is switched by a MOSFET driven from a GPIO.
+// button: 1 BC, 2 up, 3 down (same as the resistor value in kOhm). Only one can be pressed at a time.
+void pressBcButton(int button, uint32_t length) {
+  releaseBcButton();
+  if (button < 1 || button > 3) {
+    Serial.println("BC> wrong button, use 1 (BC), 2 (up) or 3 (down)");
+    return;
+  }
+  bcActivePin = bcPins[button - 1];
+  digitalWrite(bcActivePin, HIGH);
+  bcPressStart = millis();
+  bcPressLength = length;
+  Serial.printf("BC> button %d for %lu ms\n", button, (unsigned long)length);
+}
+
+void releaseBcButton() {
+  if (bcActivePin < 0)
+    return;
+  digitalWrite(bcActivePin, LOW);
+  bcActivePin = -1;
+}
+
+void updateBcButton() {
+  if (bcActivePin >= 0 && millis() - bcPressStart >= bcPressLength)
+    releaseBcButton();
+}
+
+// Handles every "ccOn<ID>" / "ccOff<ID>" in line (SimHub can glue several messages into one line).
+void catchCheckControl(const char* line) {
+  for (const char* where = strstr(line, "cc"); where != NULL; where = strstr(where + 2, "cc")) {
+    if (strncmp(where, "ccOn", 4) == 0 && isdigit((unsigned char)where[4]))
+      setCheckControl(atoi(where + 4), true);
+    else if (strncmp(where, "ccOff", 5) == 0 && isdigit((unsigned char)where[5]))
+      setCheckControl(atoi(where + 5), false);
+  }
+}
+
+bool isCheckControlActive(uint16_t id) {
+  for (uint8_t i = 0; i < ccCount; i++)
+    if (ccActive[i] == id)
+      return true;
+  return false;
+}
+
+// Frames are sent only on change (SimHub repeats the state), active ones are refreshed in loop().
+void setCheckControl(int id, bool on) {
+  if (id <= 0 || id > 0xFFFF)
+    return;
+  for (uint8_t i = 0; i < ccCount; i++) {
+    if (ccActive[i] != id)
+      continue;
+    if (!on) {
+      ccActive[i] = ccActive[--ccCount];
+      sendCheckControl(id, false);
+    }
+    return;
+  }
+  if (!on)
+    return;
+  if (ccCount >= CC_SLOTS) {
+    Serial.println("CC> too many active messages");
+    return;
+  }
+  ccActive[ccCount++] = id;
+  sendCheckControl(id, true);
+}
+
+void clearCheckControl() {
+  while (ccCount > 0)
+    sendCheckControl(ccActive[--ccCount], false);
+}
+
 // Drops needles to zero when SimHub disconnects, otherwise the last values would stay on the cluster.
 void checkBluetoothConnection() {
   bool connected = SerialBT.hasClient();
@@ -544,6 +738,7 @@ void checkBluetoothConnection() {
       speed = 0;
       rpm = 0;
       cruiseActive = false;
+      clearCheckControl();
       if (blinkers != 0) {
         blinkers = 0;
         firstBlink = true;
