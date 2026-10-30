@@ -128,6 +128,8 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   | Cargo damage ≥ 10 % | 169 (yellow exclamation mark) |
   | Trailer chassis damage ≥ 10 % | 19 (boot open) |
 
+  Forza Horizon 5 (`CurrentGame` = `FH5`) has no launch control in its telemetry, so it is detected from the inputs: speed < 5 km/h, throttle > 90 % and handbrake pulled light CC-ID 446 (checkered flag). FH5 also sends no lights, so the dashboard backlight is kept on as with parking lights.
+
   Other IDs tested on the cluster: 28 (oil level), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
 * Fuel consumption (`fuelRate<µl/s>`, also in the Uno version) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
 * After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.

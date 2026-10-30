@@ -52,7 +52,7 @@
     },
     {
       "Message": {
-        "Expression": "'lights' + if([GameRawData.TruckValues.CurrentValues.LightsValues.Parking],if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamLow],'2','1'),'0') + '\\n'"
+        "Expression": "'lights' + if([DataCorePlugin.CurrentGame] = 'FH5', '1', if([GameRawData.TruckValues.CurrentValues.LightsValues.Parking],if([GameRawData.TruckValues.CurrentValues.LightsValues.BeamLow],'2','1'),'0')) + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -165,6 +165,13 @@
     {
       "Message": {
         "Expression": "'fuelRate' + if([SpeedKmh] < 1, 0, round(isnull([DataCorePlugin.GameData.InstantConsumption_L100KM], 0) * [SpeedKmh] * 25 / 9 / 3, 0)) + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([DataCorePlugin.CurrentGame] = 'FH5' and [SpeedKmh] < 5 and [Throttle] > 90 and [Handbrake] > 0, 'ccOn446', 'ccOff446') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
