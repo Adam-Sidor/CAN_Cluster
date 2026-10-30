@@ -120,7 +120,7 @@ Some features may not work depending on the game!
   * Fuel gauge (may require pressing the Arduino RESET button)
   * Clock displaying computer system time
   * Handbrake indicator
-  * Turn signals
+  * Turn signals and hazard lights
   * Lights:
 
     * Parking lights

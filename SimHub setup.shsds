@@ -66,7 +66,7 @@
     },
     {
       "Message": {
-        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerLeftActive],'blinkers1',if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerRightActive],'blinkers2','blinkers0')) + '\\n'"
+        "Expression": "if([GameRawData.TruckValues.CurrentValues.LightsValues.HazardWarningLights],'blinkers3',if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerLeftActive],'blinkers1',if([GameRawData.TruckValues.CurrentValues.LightsValues.BlinkerRightActive],'blinkers2','blinkers0'))) + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
