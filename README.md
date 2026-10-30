@@ -8,12 +8,13 @@ This project integrates Arduino Uno, a CAN module, and a BMW E90 car dashboard t
 
 1. [Project Description](#project-description)
 2. [Requirements](#requirements)
-3. [Installation](#installation)
-4. [ESP32 Version (Bluetooth)](#esp32-version-bluetooth)
-5. [Usage](#usage)
-6. [Features](#features)
-7. [License](#license)
-8. [Contact](#contact)
+3. [Tested Hardware](#tested-hardware)
+4. [Installation](#installation)
+5. [ESP32 Version (Bluetooth)](#esp32-version-bluetooth)
+6. [Usage](#usage)
+7. [Features](#features)
+8. [License](#license)
+9. [Contact](#contact)
 
 ---
 
@@ -39,6 +40,22 @@ This project integrates Arduino Uno, a CAN module, and a BMW E90 car dashboard t
 
   * Arduino code (`.ino` file)
   * SimHub configuration (`.shsds` file)
+
+---
+
+## Tested Hardware
+
+The project has been tested only with the following setup:
+
+* BMW E90 instrument cluster, petrol version, US market:
+  * speedometer in mph (with km/h inner scale), odometer in miles
+  * fuel gauge and mpg consumption gauge
+  * most likely from a car with manual gearbox - it does not show the P/R/N/D gear display
+* Arduino Uno and ESP32 DevKit (classic ESP32 with Bluetooth Classic)
+* MCP2515 CAN module with 8 MHz crystal and TJA1050 transceiver
+* Euro Truck Simulator 2 through SimHub
+
+Other clusters (diesel, km/h, automatic gearbox, LCI, M3) may be coded differently or expect other frames, so some features (e.g., consumption gauge, check control IDs, cruise control display) may behave differently or not work at all.
 
 ---
 
@@ -95,17 +112,7 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   | INT | not connected (only used for receiving) |
 
   The module must be powered from 5 V (required by the TJA1050 transceiver). 3.3 V signals from ESP32 are at the edge of the MCP2515 input threshold when it runs at 5 V - it usually works, but if the serial monitor shows `Connecting with CAN failed!`, check the wiring and the MISO divider.
-* On-board computer buttons (BC, up, down) are not on CAN - in the car they connect cluster pin 16 to ground through 1 kΩ (BC), 2 kΩ (up) or 3 kΩ (down). They can be controlled from ESP32 with three N-channel MOSFETs (e.g., 2N7000), optional:
-
-  | ESP32 | MOSFET | Resistor to cluster pin 16 |
-  |---|---|---|
-  | GPIO25 | gate (BC) | 1 kΩ |
-  | GPIO26 | gate (up) | 2 kΩ |
-  | GPIO27 | gate (down) | 3 kΩ |
-
-  Source of each MOSFET goes to GND (common with the cluster), drain through its resistor to pin 16. A 100 kΩ resistor from each gate to GND keeps the buttons released while ESP32 boots. Do not connect GPIO directly to pin 16. Three ordinary push buttons with the same resistors work as well.
-  Commands: `bc1` / `bc2` / `bc3` press BC / up / down for 200 ms, `bcHold1` / `bcHold2` / `bcHold3` for 2 s (long press).
-* Check control messages and warning lights are sent in CAN frame `0x592`. The `ccOn<ID>` / `ccOff<ID>` commands turn a message on/off (active ones are repeated every second, otherwise the cluster drops them). The SimHub configuration maps ETS2/ATS warnings:
+* Check control messages and warning lights (also in the Uno version) are sent in CAN frame `0x592`. The `ccOn<ID>` / `ccOff<ID>` commands turn a message on/off (active ones are repeated every second, otherwise the cluster drops them). The SimHub configuration maps ETS2/ATS warnings:
 
   | Game warning | CC-ID |
   |---|---|
@@ -121,13 +128,13 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   | Cabin or chassis damage ≥ 10 % | 21 |
 
   Other IDs tested on the cluster: 28 (oil level), 166 (coolant level), 169 (yellow exclamation mark). The cluster confirms a shown message in frame `0x338` (visible with `DEBUG_CAN_RX`). The "!" service reminder (CC-ID 281) shown after every ignition on is turned off continuously (`SUPPRESS_SERVICE_LIGHT`). IDs come from [veikkos/e90-can-cluster](https://github.com/veikkos/e90-can-cluster).
-* Fuel consumption (`fuelRate<µl/s>`) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
+* Fuel consumption (`fuelRate<µl/s>`, also in the Uno version) is sent as total injected fuel in the engine data frame `0x1D0`, the cluster computes the consumption gauge from it. The gauge works only together with DME status `0x12F` and vehicle speed from DSC `0x1A0`, which are sent as well. In the SimHub configuration it is divided by 3, so truck consumption fits the car gauge - remove `/ 3` for cars.
 * After uploading the code, pair the computer with the `CAN_Cluster` device. Windows will create a COM port (Bluetooth, outgoing) - select it under `Serial settings` in SimHub. The SimHub configuration is the same as for Arduino.
 * When Bluetooth disconnects, the speedometer and tachometer drop to zero.
 * Debugging tools (USB serial monitor, 115200 baud, line ending `Newline`):
 
   * With `DEBUG_CAN_RX` enabled, frames sent by the cluster itself are printed as `CAN< ID [length] data`. Each ID is printed at most once per 2 s, `0x338` (check control messages) also on every change. Requires the MISO line to be connected.
-  * The `can<ID>:<data>[x<count>]` command (ID and data in hex) sends any frame to the cluster, e.g. `can1EE:40FF` sends it once and `can1EE:40FFx20` 20 times every 100 ms; `x0` stops a repeated frame. It works over Bluetooth too and is meant for finding unknown frames, such as the BC button on the turn signal stalk.
+  * The `can<ID>:<data>[x<count>]` command (ID and data in hex) sends any frame to the cluster, e.g. `can592:401F0031FFFFFFFF` sends it once (check engine message on) and `can592:401F0031FFFFFFFFx20` 20 times every 100 ms; `x0` stops a repeated frame. It works over Bluetooth too and is meant for finding unknown frames.
 
 ---
 
@@ -152,9 +159,9 @@ Some features may not work depending on the game!
   * Clock displaying computer system time
   * Handbrake indicator
   * Turn signals and hazard lights
-  * Truck warnings (low fuel, AdBlue, oil pressure, water temperature, battery, air pressure) and damage as check control messages (ESP32 version, ETS2/ATS)
-  * Fuel consumption gauge (ESP32 version)
-  * Cruise control set speed shown on the display while cruise is active (ESP32 version, ETS2/ATS; km/h shown as mph 1:1) - this also removes the cruise control error shown after power-up
+  * Truck warnings (low fuel, AdBlue, oil pressure, water temperature, battery, air pressure) and damage as check control messages (ETS2/ATS)
+  * Fuel consumption gauge
+  * Cruise control set speed shown on the display while cruise is active (ETS2/ATS; km/h shown as mph 1:1) - this also removes the cruise control error shown after power-up
   * Lights:
 
     * Parking lights

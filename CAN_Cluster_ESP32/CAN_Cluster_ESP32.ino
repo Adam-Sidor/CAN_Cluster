@@ -21,11 +21,6 @@
 #define CAN_RX_WATCH_ID 0x338  // this ID is also printed on every data change (check control messages)
 #define CAN_INJECT_INTERVAL 100  // interval between repeats of a frame sent with "can..." command
 #define LINE_BUFFER_SIZE 128
-#define BC_ENTER_PIN 25  // MOSFET switching 1k between cluster pin 16 and GND (BC button)
-#define BC_UP_PIN 26  // 2k (up)
-#define BC_DOWN_PIN 27  // 3k (down)
-#define BC_PRESS_TIME 200  // "bc<button>" command
-#define BC_HOLD_TIME 2000  // "bcHold<button>" command (long press)
 #define CC_SLOTS 16  // max active check control messages at a time
 #define CC_REFRESH_INTERVAL 1000  // active messages are repeated, otherwise the cluster drops them
 #define SUPPRESS_SERVICE_LIGHT true  // hide "!" service reminder (CC-ID 281) shown after every ignition on
@@ -62,10 +57,6 @@ bool cruiseActive = false;
 int cruiseSpeed = 0;  // km/h
 uint32_t cruiseRefreshInterval = 1000;
 int fuelRate = 0;  // µl/s, drives the consumption gauge and on-board computer
-const uint8_t bcPins[3] = { BC_ENTER_PIN, BC_UP_PIN, BC_DOWN_PIN };
-int8_t bcActivePin = -1;
-uint32_t bcPressStart = 0;
-uint32_t bcPressLength = 0;
 
 // CAN variables
 uint8_t abs_frame = 0xB3;
@@ -83,10 +74,6 @@ uint8_t ccCount = 0;
 void setup() {
   Serial.begin(115200);
   SerialBT.begin(BT_NAME);
-  for (uint8_t pin : bcPins) {
-    digitalWrite(pin, LOW);
-    pinMode(pin, OUTPUT);
-  }
   CAN.setPins(CS_PIN, IRQ_PIN);
   CAN.setSPIFrequency(1E6);
   while (!CAN.begin(100E3)) {
@@ -114,7 +101,6 @@ void loop() {
     if (ECHO_INPUT) Serial.println(usbReader.buffer);
   }
   checkBluetoothConnection();
-  updateBcButton();
   if (DEBUG_BT_TO_USB)
     reportBluetoothTraffic();
   if (DEBUG_CAN_RX)
@@ -567,7 +553,7 @@ bool readLine(Stream& input, LineReader& reader) {
 
 void processLine(const char* line) {
   if (catchRawFrame(line))
-    return;  // test command, hex data could look like other values (e.g. "bc1")
+    return;  // test command, hex data could look like other values (e.g. "cc...")
   int value;
   if (catchValue(line, "speed", value))
     speed = value;
@@ -590,10 +576,6 @@ void processLine(const char* line) {
     cruiseSpeed = value;
   if (catchValue(line, "cruiseRefresh", value))
     cruiseRefreshInterval = value;
-  if (catchValue(line, "bc", value))
-    pressBcButton(value, BC_PRESS_TIME);
-  if (catchValue(line, "bcHold", value))
-    pressBcButton(value, BC_HOLD_TIME);
   catchCheckControl(line);
   if (catchValue(line, "lights", value)) {
     switch (value) {
@@ -664,7 +646,7 @@ void catchTime(const char* line) {
 }
 
 // Test command for finding unknown frames: "can<ID>:<data>[x<count>]", ID and data in hex, count in decimal.
-// E.g. "can1EE:40FF" sends the frame once, "can1EE:40FFx20" 20 times every CAN_INJECT_INTERVAL ms
+// E.g. "can592:401F0031FFFFFFFF" sends the frame once, "can592:401F0031FFFFFFFFx20" 20 times every CAN_INJECT_INTERVAL ms
 // (some modules need a frame held for a while), "x0" stops the frame being repeated.
 // Returns true when the line was a "can" command (also a wrong one).
 bool catchRawFrame(const char* line) {
@@ -689,7 +671,7 @@ bool catchRawFrame(const char* line) {
       p++;
   }
   if (*end != ':' || id > 0x7FF || (*p != '\0' && !isspace((unsigned char)*p))) {
-    Serial.println("CAN> wrong command, use can<ID>:<data>[x<count>], e.g. can1EE:40FFx20");
+    Serial.println("CAN> wrong command, use can<ID>:<data>[x<count>], e.g. can592:401F0031FFFFFFFFx20");
     return true;
   }
 
@@ -700,34 +682,6 @@ bool catchRawFrame(const char* line) {
   injectedFrame = frame;
   timeToInjectedFrame = millis() - CAN_INJECT_INTERVAL;  // send immediately
   return true;
-}
-
-// Buttons on the turn signal stalk (BC, up, down) are not on CAN - they connect cluster pin 16
-// to GND through 1k, 2k or 3k. Each resistor is switched by a MOSFET driven from a GPIO.
-// button: 1 BC, 2 up, 3 down (same as the resistor value in kOhm). Only one can be pressed at a time.
-void pressBcButton(int button, uint32_t length) {
-  releaseBcButton();
-  if (button < 1 || button > 3) {
-    Serial.println("BC> wrong button, use 1 (BC), 2 (up) or 3 (down)");
-    return;
-  }
-  bcActivePin = bcPins[button - 1];
-  digitalWrite(bcActivePin, HIGH);
-  bcPressStart = millis();
-  bcPressLength = length;
-  Serial.printf("BC> button %d for %lu ms\n", button, (unsigned long)length);
-}
-
-void releaseBcButton() {
-  if (bcActivePin < 0)
-    return;
-  digitalWrite(bcActivePin, LOW);
-  bcActivePin = -1;
-}
-
-void updateBcButton() {
-  if (bcActivePin >= 0 && millis() - bcPressStart >= bcPressLength)
-    releaseBcButton();
 }
 
 // Handles every "ccOn<ID>" / "ccOff<ID>" in line (SimHub can glue several messages into one line).
