@@ -101,7 +101,7 @@
     },
     {
       "Message": {
-        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.WarningValues.OilPressure], false), 'ccOn212', 'ccOff212') + '\\n'"
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.WarningValues.OilPressure], false) and [EngineStarted], 'ccOn212', 'ccOff212') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -115,7 +115,7 @@
     },
     {
       "Message": {
-        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.WarningValues.BatteryVoltage], false), 'ccOn213', 'ccOff213') + '\\n'"
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DashboardValues.WarningValues.BatteryVoltage], false) and [EngineStarted], 'ccOn213', 'ccOff213') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -129,7 +129,14 @@
     },
     {
       "Message": {
-        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.WheelsAvg], 0) >= 0.1, 'ccOn50', 'ccOff50') + '\\n'"
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.WheelsAvg], 0) >= 0.3, 'ccOn50', 'ccOff50') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.WheelsAvg], 0) >= 0.1, 'ccOn336', 'ccOff336') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -143,7 +150,14 @@
     },
     {
       "Message": {
-        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Chassis], 0) >= 0.3, 'ccOn21', 'ccOff21') + '\\n'"
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Chassis], 0) >= 0.3, 'ccOn31', 'ccOff31') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.DamageValues.Chassis], 0) >= 0.5, 'ccOn21', 'ccOff21') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -157,7 +171,7 @@
     },
     {
       "Message": {
-        "Expression": "if(isnull([GameRawData.TrailerValues01.DamageValues.Chassis], 0) >= 0.1, 'ccOn19', 'ccOff19') + '\\n'"
+        "Expression": "if(isnull([GameRawData.TrailerValues01.DamageValues.Chassis], 0) >= 0.1, 'ccOn423', 'ccOff423') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0
@@ -172,6 +186,27 @@
     {
       "Message": {
         "Expression": "if([DataCorePlugin.CurrentGame] = 'FH5' and [SpeedKmh] < 5 and [Throttle] > 90 and [Handbrake] > 0, 'ccOn446', 'ccOff446') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([DataCorePlugin.CurrentGame] = 'FH5' and (abs([GameRawData.TireSlipRatioFrontLeft]) > 1 or abs([GameRawData.TireSlipRatioFrontRight]) > 1 or abs([GameRawData.TireSlipRatioRearLeft]) > 1 or abs([GameRawData.TireSlipRatioRearRight]) > 1), 'ccOn692', 'ccOff692') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if([Throttle] >= 99 and ([Gear] = 'N' or [Gear] = 'P'), 'ccOn393', 'ccOff393') + '\\n'"
+      },
+      "IsEnabled": true,
+      "MaximumFrequency": 0
+    },
+    {
+      "Message": {
+        "Expression": "if(isnull([GameRawData.TruckValues.CurrentValues.LightsValues.Beacon], false), 'ccOn508', 'ccOff508') + '\\n'"
       },
       "IsEnabled": true,
       "MaximumFrequency": 0

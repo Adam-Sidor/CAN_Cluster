@@ -118,19 +118,23 @@ The `CAN_Cluster_ESP32` folder contains a version for ESP32 that receives data f
   |---|---|
   | Low fuel | 275 |
   | AdBlue | 643 |
-  | Oil pressure | 212 |
+  | Oil pressure (engine running) | 212 |
   | Water temperature | 39 |
-  | Battery voltage | 213 |
+  | Battery voltage (engine running) | 213 |
   | Air pressure | 308 |
-  | Wheels damage ≥ 10 % | 50 (tyre pressure) |
+  | Wheels damage ≥ 10 % | 336 (small tyre pressure light) |
+  | Wheels damage ≥ 30 % | 50 (tyre pressure) |
   | Chassis damage ≥ 10 % | 34 (check engine) |
-  | Chassis damage ≥ 30 % | 21 |
+  | Chassis damage ≥ 30 % | 31 (check engine, large) |
+  | Chassis damage ≥ 50 % | 21 |
   | Cargo damage ≥ 10 % | 169 (yellow exclamation mark) |
-  | Trailer chassis damage ≥ 10 % | 19 (boot open) |
+  | Trailer chassis damage ≥ 10 % | 423 (trailer hitch) |
+  | Full throttle with gear N or P (all games) | 393 (gear selector) |
+  | Warning lights (beacon) on | 508 (hazard lights), together with the rear fog light indicator |
 
-  Forza Horizon 5 (`CurrentGame` = `FH5`) has no launch control in its telemetry, so it is detected from the inputs: speed < 5 km/h, throttle > 90 % and handbrake pulled light CC-ID 446 (checkered flag). FH5 also sends no lights, so the dashboard backlight is kept on as with parking lights.
+  Forza Horizon 5 (`CurrentGame` = `FH5`) has no launch control in its telemetry, so it is detected from the inputs: speed < 5 km/h, throttle > 90 % and handbrake pulled light CC-ID 446 (checkered flag). Wheel slip (`TireSlipRatio...` of any wheel above 1) lights CC-ID 692 (skid). FH5 also sends no lights, so the dashboard backlight is kept on as with parking lights.
 
-  Other IDs tested on the cluster (found with `ccScan`, not used yet):
+  IDs tested on the cluster (found with `ccScan`):
 
   | CC-ID | Shown on the cluster |
   |---|---|
